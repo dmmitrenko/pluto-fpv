@@ -299,7 +299,7 @@ blocks:
     option: '''pluto_uri'''
     section: main
     type: string
-    value: ip:192.168.2.1
+    value: ip:192.168.3.1
     writeback: None
   states:
     bus_sink: false
