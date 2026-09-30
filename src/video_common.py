@@ -10,7 +10,7 @@ import time
 SRC_DIR = os.path.dirname(os.path.abspath(__file__))
 COMMON_INI = "common.ini"
 # Log files go to logs/<yyyy-mm-dd>/ in the repository root (next to src), one
-# folder per day. The packetizer, the depacketizer and fpv_tx_run.sh use the
+# folder per day. The packetizer, the depacketizer and tx_modem_loop.sh use the
 # same place.
 LOG_DIR = os.path.join(os.path.dirname(SRC_DIR), "logs")
 

@@ -1,7 +1,8 @@
-# Transmitter modem: UDP -> QPSK -> Pluto, restarted by fpv_tx_run.sh whenever
+# Transmitter modem: UDP -> QPSK -> Pluto, restarted by tx_modem_loop.sh whenever
 # the Pluto disappears. Starts 10 s after the video, so that the current surge
 # of the camera starting up does not meet the Pluto being configured.
-# pi/deploy.sh fills in @USER@ and @SRC@ and installs it to /etc/systemd/system.
+# pi/deploy.sh fills in @USER@, @SRC@ and @ROOT@ and installs it to
+# /etc/systemd/system.
 [Unit]
 Description=FPV transmitter modem (GNU Radio, Pluto)
 After=network.target fpv-video.service
@@ -10,7 +11,7 @@ After=network.target fpv-video.service
 User=@USER@
 WorkingDirectory=@SRC@
 ExecStartPre=/bin/sleep 10
-ExecStart=@SRC@/fpv_tx_run.sh
+ExecStart=@ROOT@/pi/tx_modem_loop.sh
 KillSignal=SIGTERM
 TimeoutStopSec=15
 Restart=always

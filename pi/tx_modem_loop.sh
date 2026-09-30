@@ -3,8 +3,8 @@
 # The modem exits when the Pluto disappears (unplugged, or restarted after a
 # power dip); this script waits until the Pluto answers again and starts it anew.
 # Also rebuilds fpv_tx_headless.py when fpv_tx_headless.grc is newer.
-#   ./fpv_tx_run.sh          run until Ctrl+C
-cd "$(dirname "$0")" || exit 1
+#   pi/tx_modem_loop.sh          run until Ctrl+C
+cd "$(dirname "$0")/../src" || exit 1
 PATH="$HOME/radioconda/bin:$PATH"
 PY=python3
 [ -x "$HOME/radioconda/bin/python" ] && PY="$HOME/radioconda/bin/python"

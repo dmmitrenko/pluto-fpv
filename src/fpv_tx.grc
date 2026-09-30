@@ -483,7 +483,7 @@ blocks:
     code: |-
       # Ends the program when the Pluto stops taking samples (it was unplugged or
       # restarted after a power dip). Without this the flow graph waits forever;
-      # fpv_tx_run.sh starts it again once the Pluto is back.
+      # tx_modem_loop.sh starts it again once the Pluto is back.
       import logging
       import os
       import threading
@@ -533,7 +533,7 @@ blocks:
       \ and only produces a new frame while less than max_latency_ms of\nsignal is\
       \ waiting in the transmit chain.\n\"\"\"\n\nimport logging\nimport os\nimport socket\n\
       import threading\nimport time\nimport zlib\n\nimport numpy as np\nfrom gnuradio\
-      \ import gr\n\n# Log files go to logs/<yyyy-mm-dd>/ in the repository root (next to src), one\n# folder per day. video_common.py and fpv_tx_run.sh use the same place.\ndef log_path(name):\n    folder = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),\n                          \"logs\", time.strftime(\"%Y-%m-%d\"))\n    os.makedirs(folder, exist_ok=True)\n    return os.path.join(folder, name)\n\n\nTS_PACKET_LEN = 188\nSYNC_WORD = bytes([0xE1, 0x5A, 0xE8, 0x93])\n\
+      \ import gr\n\n# Log files go to logs/<yyyy-mm-dd>/ in the repository root (next to src), one\n# folder per day. video_common.py and tx_modem_loop.sh use the same place.\ndef log_path(name):\n    folder = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),\n                          \"logs\", time.strftime(\"%Y-%m-%d\"))\n    os.makedirs(folder, exist_ok=True)\n    return os.path.join(folder, name)\n\n\nTS_PACKET_LEN = 188\nSYNC_WORD = bytes([0xE1, 0x5A, 0xE8, 0x93])\n\
       FRAME_TYPE_IDLE = 0\nFRAME_TYPE_DATA = 1\n# MPEG-TS null packet (PID 0x1FFF);\
       \ players ignore it.\nTS_NULL_PACKET = bytes([0x47, 0x1F, 0xFF, 0x10]) + bytes([0xFF])\
       \ * 184\n# Queue limit in frames. At ~1 Mbit/s 64 frames is about 0.4 s of video.\n\

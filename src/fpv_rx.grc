@@ -660,7 +660,7 @@ blocks:
       \ sync/loss/recovery events to a log file;\n- provides counters for the periodic\
       \ status line in the log.\n\"\"\"\n\nimport collections\nimport logging\nimport os\nimport\
       \ socket\nimport threading\nimport time\nimport zlib\n\nimport numpy as np\n\
-      from gnuradio import gr\n\n# Log files go to logs/<yyyy-mm-dd>/ in the repository root (next to src), one\n# folder per day. video_common.py and fpv_tx_run.sh use the same place.\ndef log_path(name):\n    folder = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),\n                          \"logs\", time.strftime(\"%Y-%m-%d\"))\n    os.makedirs(folder, exist_ok=True)\n    return os.path.join(folder, name)\n\n\nTS_PACKET_LEN = 188\nSYNC_WORD = bytes([0xE1, 0x5A,\
+      from gnuradio import gr\n\n# Log files go to logs/<yyyy-mm-dd>/ in the repository root (next to src), one\n# folder per day. video_common.py and tx_modem_loop.sh use the same place.\ndef log_path(name):\n    folder = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),\n                          \"logs\", time.strftime(\"%Y-%m-%d\"))\n    os.makedirs(folder, exist_ok=True)\n    return os.path.join(folder, name)\n\n\nTS_PACKET_LEN = 188\nSYNC_WORD = bytes([0xE1, 0x5A,\
       \ 0xE8, 0x93])\nHEADER_LEN = 8\nFRAME_TYPE_DATA = 1\n# Bit errors tolerated\
       \ in the 32-bit sync word while searching.\nSYNC_MAX_ERRORS = 2\n# Bad frames\
       \ in a row before frame sync is declared lost.\nMAX_BAD_FRAMES = 4\n# No good\
