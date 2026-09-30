@@ -41,11 +41,14 @@ RESTART_DELAY = 1.0
 
 def list_cameras(ffmpeg):
     if os.name != "nt":
-        # Linux: every camera has one capture node with index 0; the other
-        # nodes of the same camera carry only metadata.
+        # Linux: USB cameras only; the Raspberry Pi 5 has video nodes of its
+        # own (HEVC decoder, ISP) that are not cameras. Every camera has one
+        # capture node with index 0; the other nodes carry only metadata.
         cameras = []
         for sys_dir in sorted(glob.glob("/sys/class/video4linux/video*"),
                               key=lambda d: int(re.sub(r"\D", "", os.path.basename(d)))):
+            if "/usb" not in os.path.realpath(os.path.join(sys_dir, "device")):
+                continue
             try:
                 with open(os.path.join(sys_dir, "index")) as f:
                     if f.read().strip() != "0":
@@ -78,9 +81,8 @@ def input_args(video, ffmpeg, log):
         if not name:
             cameras = list_cameras(ffmpeg)
             if not cameras:
-                sys.exit("ERROR: no camera found (check with: python video_tx.py --list)")
+                return None
             name = cameras[0]
-        log.info("camera: %s", name)
         if os.name != "nt":
             return ["-f", "v4l2", "-video_size", size, "-framerate", video["fps"], "-i", name]
         return ["-f", "dshow", "-rtbufsize", "8M", "-video_size", size,
@@ -93,6 +95,10 @@ def input_args(video, ffmpeg, log):
 
 
 def build_command(ffmpeg, main, video, log):
+    """ffmpeg command line, or None while no camera is connected."""
+    source = input_args(video, ffmpeg, log)
+    if source is None:
+        return None
     bitrate = int(video["bitrate_kbps"])
     x264 = "keyint=%s:min-keyint=%s" % (video["keyint"], video["keyint"])
     if int(video["intra_refresh"]):
@@ -100,7 +106,7 @@ def build_command(ffmpeg, main, video, log):
         # so the bit rate stays even and nothing queues up before the modem.
         x264 += ":intra-refresh=1"
     return [ffmpeg, "-hide_banner", "-loglevel", "warning", "-nostats",
-            "-progress", "pipe:1", "-stats_period", "1"] + input_args(video, ffmpeg, log) + [
+            "-progress", "pipe:1", "-stats_period", "1"] + source + [
         "-an",
         "-vf", "scale=%s:%s,fps=%s,format=yuv420p" % (
             video["width"], video["height"], video["fps"]),
@@ -206,12 +212,27 @@ def main():
         log.warning("video needs about %.0f kbit/s with MPEG-TS headers, the link offers "
                     "%.0f kbit/s: lower bitrate_kbps in tx.ini", needed, capacity)
 
-    command = build_command(ffmpeg, main_cfg, video, log)
-    log.info("command: %s", subprocess.list2cmdline(command))
     started = time.monotonic()
     process = None
+    last_command = None
+    waiting = False
     try:
         while True:
+            # The camera is looked up again before every start of ffmpeg, so a
+            # camera plugged in later, or reconnected, is found by itself.
+            command = build_command(ffmpeg, main_cfg, video, log)
+            if command is None:
+                if not waiting:
+                    log.warning("no camera found, waiting for one (list: video_tx.py --list)")
+                    waiting = True
+                if args.seconds and time.monotonic() - started >= args.seconds:
+                    raise KeyboardInterrupt
+                time.sleep(RESTART_DELAY)
+                continue
+            waiting = False
+            if command != last_command:
+                log.info("command: %s", subprocess.list2cmdline(command))
+                last_command = command
             process = subprocess.Popen(command, stdin=subprocess.PIPE,
                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             Progress(process.stdout, log).start()
