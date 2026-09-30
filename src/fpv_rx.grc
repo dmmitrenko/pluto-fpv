@@ -299,7 +299,7 @@ blocks:
     option: '''pluto_uri'''
     section: main
     type: string
-    value: ip:192.168.3.1
+    value: ip:192.168.2.1
     writeback: None
   states:
     bus_sink: false
@@ -513,16 +513,17 @@ blocks:
     rotation: 0
     state: enabled
 - name: agc
-  id: analog_agc_xx
+  id: analog_agc2_xx
   parameters:
     affinity: ''
     alias: ''
+    attack_rate: 1e-1
     comment: ''
+    decay_rate: 1e-3
     gain: '1.0'
     max_gain: '65536'
     maxoutbuf: '0'
     minoutbuf: '0'
-    rate: 1e-3
     reference: '1.0'
     type: complex
   states:
@@ -1327,8 +1328,80 @@ blocks:
     rotation: 0
     state: enabled
 
+- name: clip_split
+  id: blocks_complex_to_float
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    vlen: '1'
+    maxoutbuf: '0'
+    minoutbuf: '0'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [280, 960.0]
+    rotation: 0
+    state: enabled
+- name: clip_i
+  id: analog_rail_ff
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    hi: '2.0'
+    lo: '-2.0'
+    maxoutbuf: '0'
+    minoutbuf: '0'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [480, 936.0]
+    rotation: 0
+    state: enabled
+- name: clip_q
+  id: analog_rail_ff
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    hi: '2.0'
+    lo: '-2.0'
+    maxoutbuf: '0'
+    minoutbuf: '0'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [480, 1000.0]
+    rotation: 0
+    state: enabled
+- name: clip_join
+  id: blocks_float_to_complex
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    vlen: '1'
+    maxoutbuf: '0'
+    minoutbuf: '0'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [680, 960.0]
+    rotation: 0
+    state: enabled
+
 connections:
-- [agc, '0', carrier_coarse, '0']
+- [agc, '0', clip_split, '0']
+- [clip_split, '0', clip_i, '0']
+- [clip_split, '1', clip_q, '0']
+- [clip_i, '0', clip_join, '0']
+- [clip_q, '0', clip_join, '1']
+- [clip_join, '0', carrier_coarse, '0']
 - [bits_to_float, '0', soft_scale, '0']
 - [carrier_coarse, '0', clock_sync, '0']
 - [carrier_fine, '0', rx_constellation, '0']

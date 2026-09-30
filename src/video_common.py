@@ -9,7 +9,8 @@ import sys
 SRC_DIR = os.path.dirname(os.path.abspath(__file__))
 COMMON_INI = "common.ini"
 
-INSTALL_HINT = "install it with:  winget install Gyan.FFmpeg"
+INSTALL_HINT = ("install it with:  winget install Gyan.FFmpeg" if os.name == "nt"
+                else "install it with:  sudo apt install ffmpeg")
 
 
 def read_config(ini_name, video_defaults, main_defaults):

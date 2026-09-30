@@ -12,6 +12,8 @@ Usage:
     python video_tx.py --source test    test picture instead of the camera
 """
 import argparse
+import glob
+import os
 import re
 import subprocess
 import sys
@@ -38,6 +40,20 @@ RESTART_DELAY = 1.0
 
 
 def list_cameras(ffmpeg):
+    if os.name != "nt":
+        # Linux: every camera has one capture node with index 0; the other
+        # nodes of the same camera carry only metadata.
+        cameras = []
+        for sys_dir in sorted(glob.glob("/sys/class/video4linux/video*"),
+                              key=lambda d: int(re.sub(r"\D", "", os.path.basename(d)))):
+            try:
+                with open(os.path.join(sys_dir, "index")) as f:
+                    if f.read().strip() != "0":
+                        continue
+            except OSError:
+                pass
+            cameras.append("/dev/" + os.path.basename(sys_dir))
+        return cameras
     result = subprocess.run(
         [ffmpeg, "-hide_banner", "-list_devices", "true", "-f", "dshow", "-i", "dummy"],
         capture_output=True)
@@ -65,6 +81,8 @@ def input_args(video, ffmpeg, log):
                 sys.exit("ERROR: no camera found (check with: python video_tx.py --list)")
             name = cameras[0]
         log.info("camera: %s", name)
+        if os.name != "nt":
+            return ["-f", "v4l2", "-video_size", size, "-framerate", video["fps"], "-i", name]
         return ["-f", "dshow", "-rtbufsize", "8M", "-video_size", size,
                 "-framerate", video["fps"], "-i", "video=" + name]
     if source == "test":
