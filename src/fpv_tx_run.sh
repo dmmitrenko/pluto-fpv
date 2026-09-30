@@ -11,11 +11,13 @@ PY=python3
 URI=$(sed -nE 's/^pluto_uri *= *(.+)$/\1/p' tx.ini | tr -d '\r')
 RESTART_DELAY=2
 
+# Same log file as the modem: logs/<yyyy-mm-dd>/tx.log next to src.
 log() {
-    local line
+    local line dir
     line="$(date '+%Y-%m-%d %H:%M:%S,%3N') $1 run: $2"
+    dir="../logs/$(date +%Y-%m-%d)"
     echo "$line"
-    echo "$line" >> tx.log
+    mkdir -p "$dir" && echo "$line" >> "$dir/tx.log"
 }
 
 child=

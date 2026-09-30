@@ -506,9 +506,9 @@ blocks:
       \ this block and the radio. To avoid that, the block is told how many\nsamples\
       \ the radio has already taken (consumed_samples, updated by a Function\nProbe)\
       \ and only produces a new frame while less than max_latency_ms of\nsignal is\
-      \ waiting in the transmit chain.\n\"\"\"\n\nimport logging\nimport socket\n\
+      \ waiting in the transmit chain.\n\"\"\"\n\nimport logging\nimport os\nimport socket\n\
       import threading\nimport time\nimport zlib\n\nimport numpy as np\nfrom gnuradio\
-      \ import gr\n\nTS_PACKET_LEN = 188\nSYNC_WORD = bytes([0xE1, 0x5A, 0xE8, 0x93])\n\
+      \ import gr\n\n# Log files go to logs/<yyyy-mm-dd>/ in the repository root (next to src), one\n# folder per day. video_common.py and fpv_tx_run.sh use the same place.\ndef log_path(name):\n    folder = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),\n                          \"logs\", time.strftime(\"%Y-%m-%d\"))\n    os.makedirs(folder, exist_ok=True)\n    return os.path.join(folder, name)\n\n\nTS_PACKET_LEN = 188\nSYNC_WORD = bytes([0xE1, 0x5A, 0xE8, 0x93])\n\
       FRAME_TYPE_IDLE = 0\nFRAME_TYPE_DATA = 1\n# MPEG-TS null packet (PID 0x1FFF);\
       \ players ignore it.\nTS_NULL_PACKET = bytes([0x47, 0x1F, 0xFF, 0x10]) + bytes([0xFF])\
       \ * 184\n# Queue limit in frames. At ~1 Mbit/s 64 frames is about 0.4 s of video.\n\
@@ -549,7 +549,7 @@ blocks:
       \ the log are opened in start(), not in __init__, because\n    # GNU Radio Companion\
       \ creates the block once just to inspect its ports.\n    def start(self):\n\
       \        self._log.setLevel(logging.INFO)\n        if self.log_file and not\
-      \ self._log.handlers:\n            handler = logging.FileHandler(self.log_file)\n\
+      \ self._log.handlers:\n            handler = logging.FileHandler(log_path(self.log_file))\n\
       \            handler.setFormatter(logging.Formatter(\"%(asctime)s %(levelname)s\
       \ %(message)s\"))\n            self._log.addHandler(handler)\n\n        self._sock\
       \ = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)\n        self._sock.setsockopt(socket.SOL_SOCKET,\
