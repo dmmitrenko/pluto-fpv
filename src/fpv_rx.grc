@@ -1,0 +1,1356 @@
+options:
+  parameters:
+    author: ''
+    catch_exceptions: 'True'
+    category: '[GRC Hier Blocks]'
+    cmake_opt: ''
+    comment: ''
+    copyright: ''
+    description: ''
+    gen_cmake: 'On'
+    gen_linking: dynamic
+    generate_options: qt_gui
+    hier_block_src_path: '.:'
+    id: fpv_rx
+    max_nouts: '0'
+    output_language: python
+    placement: (0,0)
+    qt_qss_theme: ''
+    realtime_scheduling: ''
+    run: 'True'
+    run_command: '{python} -u {filename}'
+    run_options: prompt
+    sizing_mode: fixed
+    thread_safe_setters: ''
+    title: fpv_rx
+    window_size: (1000,1000)
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [16, 16.0]
+    rotation: 0
+    state: enabled
+
+blocks:
+- name: bitrate_label
+  id: variable_qtgui_label
+  parameters:
+    comment: ''
+    formatter: None
+    gui_hint: 2,0,1,2
+    label: '''Received bitrate'''
+    type: string
+    value: bitrate_probe
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [2896, 448.0]
+    rotation: 0
+    state: enabled
+- name: bitrate_probe
+  id: variable_function_probe
+  parameters:
+    block_id: depacketizer
+    comment: ''
+    function_args: ''
+    function_name: get_bitrate_text
+    poll_rate: '4'
+    value: '''...'''
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [2712, 200.0]
+    rotation: 0
+    state: enabled
+- name: cc_decoder
+  id: variable_cc_decoder_def
+  parameters:
+    comment: ''
+    dim1: '1'
+    dim2: '1'
+    framebits: '2048'
+    k: fec_k
+    mode: fec.CC_STREAMING
+    ndim: '0'
+    padding: 'False'
+    polys: fec_poly_list
+    rate: '2'
+    state_end: '-1'
+    state_start: '0'
+    value: '"ok"'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1248, 1364.0]
+    rotation: 0
+    state: enabled
+- name: center_freq
+  id: variable_config
+  parameters:
+    comment: ''
+    config_file: common.ini
+    option: center_freq
+    section: main
+    type: int
+    value: '2420000000'
+    writeback: None
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [16, 192.0]
+    rotation: 0
+    state: enabled
+- name: excess_bw
+  id: variable_config
+  parameters:
+    comment: ''
+    config_file: common.ini
+    option: excess_bw
+    section: main
+    type: real
+    value: '0.35'
+    writeback: None
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [520, 16.0]
+    rotation: 0
+    state: enabled
+- name: fec_enabled
+  id: variable_config
+  parameters:
+    comment: ''
+    config_file: common.ini
+    option: fec_enabled
+    section: main
+    type: int
+    value: '1'
+    writeback: None
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1880, 16.0]
+    rotation: 0
+    state: enabled
+- name: fec_k
+  id: variable_config
+  parameters:
+    comment: ''
+    config_file: common.ini
+    option: fec_k
+    section: main
+    type: int
+    value: '7'
+    writeback: None
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [2560, 16.0]
+    rotation: 0
+    state: enabled
+- name: fec_poly_list
+  id: variable
+  parameters:
+    comment: ''
+    value: '[int(p) for p in fec_polys.split('','')]'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [3176, 376.0]
+    rotation: 0
+    state: enabled
+- name: fec_polys
+  id: variable_config
+  parameters:
+    comment: ''
+    config_file: common.ini
+    option: '''fec_polys'''
+    section: main
+    type: string
+    value: 79,109
+    writeback: None
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [2088, 200.0]
+    rotation: 0
+    state: enabled
+- name: log_period_s
+  id: variable_config
+  parameters:
+    comment: ''
+    config_file: rx.ini
+    option: log_period_s
+    section: main
+    type: real
+    value: '1'
+    writeback: None
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [3368, 336.0]
+    rotation: 0
+    state: enabled
+- name: loss_label
+  id: variable_qtgui_label
+  parameters:
+    comment: ''
+    formatter: None
+    gui_hint: 3,0,1,2
+    label: '''Lost packets'''
+    type: string
+    value: loss_probe
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [2896, 536.0]
+    rotation: 0
+    state: enabled
+- name: loss_probe
+  id: variable_function_probe
+  parameters:
+    block_id: depacketizer
+    comment: ''
+    function_args: ''
+    function_name: get_loss_text
+    poll_rate: '4'
+    value: '''...'''
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [2552, 200.0]
+    rotation: 0
+    state: enabled
+- name: max_freq_offset_hz
+  id: variable_config
+  parameters:
+    comment: ''
+    config_file: rx.ini
+    option: max_freq_offset_hz
+    section: main
+    type: real
+    value: '200000'
+    writeback: None
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [3368, 240.0]
+    rotation: 0
+    state: enabled
+- name: mode_label
+  id: variable_qtgui_label
+  parameters:
+    comment: ''
+    formatter: None
+    gui_hint: 4,0,1,2
+    label: '''Modulation'''
+    type: string
+    value: modulation_text
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [3024, 448.0]
+    rotation: 0
+    state: enabled
+- name: modulation_text
+  id: variable
+  parameters:
+    comment: ''
+    value: ('QPSK + CC 1/2, K=%d' % fec_k) if fec_enabled else 'QPSK, FEC off'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [2864, 376.0]
+    rotation: 0
+    state: enabled
+- name: nfilts
+  id: variable
+  parameters:
+    comment: ''
+    value: '32'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [720, 16.0]
+    rotation: 0
+    state: enabled
+- name: pluto_uri
+  id: variable_config
+  parameters:
+    comment: ''
+    config_file: rx.ini
+    option: '''pluto_uri'''
+    section: main
+    type: string
+    value: ip:192.168.2.1
+    writeback: None
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [16, 344.0]
+    rotation: 0
+    state: enabled
+- name: qpsk
+  id: variable_constellation
+  parameters:
+    comment: ''
+    const_points: '[-1-1j, -1+1j, 1+1j, 1-1j]'
+    dims: '1'
+    normalization: digital.constellation.AMPLITUDE_NORMALIZATION
+    npwr: '1.0'
+    precision: '8'
+    rot_sym: '4'
+    soft_dec_lut: None
+    sym_map: '[0, 1, 3, 2]'
+    type: calcdist
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1208, 1040.0]
+    rotation: 0
+    state: enabled
+- name: rf_bandwidth
+  id: variable_config
+  parameters:
+    comment: ''
+    config_file: rx.ini
+    option: rf_bandwidth
+    section: main
+    type: int
+    value: '2000000'
+    writeback: None
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [176, 344.0]
+    rotation: 0
+    state: enabled
+- name: rrc_taps
+  id: variable
+  parameters:
+    comment: ''
+    value: firdes.root_raised_cosine(nfilts, nfilts, 1.0/float(sps), excess_bw, 11*sps*nfilts)
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [720, 96.0]
+    rotation: 0
+    state: enabled
+- name: rx_gain_cfg
+  id: variable_config
+  parameters:
+    comment: ''
+    config_file: rx.ini
+    option: rx_gain
+    section: main
+    type: real
+    value: '40'
+    writeback: None
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [3208, 512.0]
+    rotation: 0
+    state: enabled
+- name: rx_gain_slider
+  id: variable_qtgui_range
+  parameters:
+    comment: ''
+    gui_hint: 0,0,1,2
+    label: '''RX gain, dB'''
+    min_len: '200'
+    orient: QtCore.Qt.Horizontal
+    rangeType: float
+    start: '0'
+    step: '1'
+    stop: '71'
+    value: rx_gain_cfg
+    widget: counter_slider
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [16, 496.0]
+    rotation: 0
+    state: enabled
+- name: samp_rate
+  id: variable_config
+  parameters:
+    comment: ''
+    config_file: common.ini
+    option: samp_rate
+    section: main
+    type: int
+    value: '2000000'
+    writeback: None
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [152, 192.0]
+    rotation: 0
+    state: enabled
+- name: sps
+  id: variable_config
+  parameters:
+    comment: ''
+    config_file: common.ini
+    option: sps
+    section: main
+    type: int
+    value: '2'
+    writeback: None
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [384, 16.0]
+    rotation: 0
+    state: enabled
+- name: sync_label
+  id: variable_qtgui_label
+  parameters:
+    comment: ''
+    formatter: None
+    gui_hint: 1,0,1,2
+    label: '''Sync'''
+    type: string
+    value: sync_probe
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [3008, 536.0]
+    rotation: 0
+    state: enabled
+- name: sync_probe
+  id: variable_function_probe
+  parameters:
+    block_id: depacketizer
+    comment: ''
+    function_args: ''
+    function_name: get_sync_text
+    poll_rate: '4'
+    value: '''...'''
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [2872, 200.0]
+    rotation: 0
+    state: enabled
+- name: ts_per_frame
+  id: variable_config
+  parameters:
+    comment: ''
+    config_file: common.ini
+    option: ts_per_frame
+    section: main
+    type: int
+    value: '4'
+    writeback: None
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [2696, 16.0]
+    rotation: 0
+    state: enabled
+- name: udp_out_addr
+  id: variable_config
+  parameters:
+    comment: ''
+    config_file: rx.ini
+    option: '''udp_out_addr'''
+    section: main
+    type: string
+    value: 127.0.0.1
+    writeback: None
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [3200, 216.0]
+    rotation: 0
+    state: enabled
+- name: udp_out_port
+  id: variable_config
+  parameters:
+    comment: ''
+    config_file: rx.ini
+    option: udp_out_port
+    section: main
+    type: int
+    value: '5001'
+    writeback: None
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [3064, 216.0]
+    rotation: 0
+    state: enabled
+- name: agc
+  id: analog_agc_xx
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    gain: '1.0'
+    max_gain: '65536'
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    rate: 1e-3
+    reference: '1.0'
+    type: complex
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [280, 888.0]
+    rotation: 0
+    state: enabled
+- name: bits_to_float
+  id: blocks_char_to_float
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    scale: '1'
+    vlen: '1'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [2208, 1024.0]
+    rotation: 0
+    state: enabled
+- name: carrier_coarse
+  id: digital_fll_band_edge_cc
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    filter_size: 11*sps + 1
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    rolloff: excess_bw
+    samps_per_sym: sps
+    type: cc
+    w: '0.0628'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [464, 872.0]
+    rotation: 0
+    state: enabled
+- name: carrier_fine
+  id: digital_costas_loop_cc
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    order: '4'
+    use_snr: 'False'
+    w: '0.0628'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1016, 792.0]
+    rotation: 0
+    state: enabled
+- name: carrier_loop_limits
+  id: snippet
+  parameters:
+    alias: ''
+    code: '# Keep the carrier loops inside the expected frequency offset range.
+
+      # Without the limits they wander over noise while the signal is absent,
+
+      # get stuck at the far end of their range and the link does not recover.
+
+      import math
+
+      limit = 2 * math.pi * self.max_freq_offset_hz / self.samp_rate
+
+      self.carrier_coarse.set_max_freq(limit)
+
+      self.carrier_coarse.set_min_freq(-limit)
+
+      self.carrier_fine.set_max_freq(0.5)
+
+      self.carrier_fine.set_min_freq(-0.5)
+
+      '
+    comment: ''
+    priority: '0'
+    section: main_after_init
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1032, 1360.0]
+    rotation: 0
+    state: enabled
+- name: clock_sync
+  id: digital_pfb_clock_sync_xxx
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    filter_size: nfilts
+    init_phase: nfilts/2
+    loop_bw: '0.0628'
+    max_dev: '0.02'
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    osps: '1'
+    sps: sps
+    taps: rrc_taps
+    type: ccf
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [720, 816.0]
+    rotation: 0
+    state: enabled
+- name: depacketizer
+  id: epy_block
+  parameters:
+    _source_code: "\"\"\"\nFPV Depacketizer (sink block).\n\nInput: the demodulated\
+      \ and FEC-decoded bit stream (one bit per byte).\nFrame layout (see the packetizer):\n\
+      \n    [ sync 32 bit | length 16 bit | length 16 bit | seq 16 bit | type 8 bit\
+      \ | payload | CRC32 ]\n\nWhat the block does:\n- frame sync: searches for the\
+      \ sync word, checks the length fields and the\n  CRC32; after the first good\
+      \ frame it expects the next frames back to back\n  and only returns to searching\
+      \ after several bad frames in a row;\n- removes whitening, checks CRC32, drops\
+      \ damaged frames;\n- sends the payload of data frames to UDP (MPEG-TS for the\
+      \ video player);\n- counts lost frames from gaps in the sequence numbers;\n\
+      - tracks sync state, received bitrate and loss ratio for the GUI;\n- writes\
+      \ sync/loss/recovery events to a log file;\n- provides counters for the periodic\
+      \ status line in the log.\n\"\"\"\n\nimport collections\nimport logging\nimport\
+      \ socket\nimport threading\nimport time\nimport zlib\n\nimport numpy as np\n\
+      from gnuradio import gr\n\nTS_PACKET_LEN = 188\nSYNC_WORD = bytes([0xE1, 0x5A,\
+      \ 0xE8, 0x93])\nHEADER_LEN = 8\nFRAME_TYPE_DATA = 1\n# Bit errors tolerated\
+      \ in the 32-bit sync word while searching.\nSYNC_MAX_ERRORS = 2\n# Bad frames\
+      \ in a row before frame sync is declared lost.\nMAX_BAD_FRAMES = 4\n# No good\
+      \ frame for this long means the link is considered lost.\nSYNC_TIMEOUT_S = 0.5\n\
+      # Window for the bitrate and loss figures shown in the GUI.\nSTATS_WINDOW_S\
+      \ = 2.0\n# A jump this large in sequence numbers is a transmitter restart, not\
+      \ loss.\nMAX_PLAUSIBLE_GAP = 2000\n\n\ndef whitening_sequence(length):\n   \
+      \ \"\"\"Pseudo-random bytes from the LFSR x^7 + x^4 + 1, all-ones start.\"\"\
+      \"\n    state = 0x7F\n    out = bytearray(length)\n    for i in range(length):\n\
+      \        value = 0\n        for _ in range(8):\n            bit = ((state >>\
+      \ 6) ^ (state >> 3)) & 1\n            state = ((state << 1) | bit) & 0x7F\n\
+      \            value = (value << 1) | bit\n        out[i] = value\n    return\
+      \ np.frombuffer(bytes(out), dtype=np.uint8)\n\n\nclass blk(gr.sync_block):\n\
+      \    def __init__(self, udp_addr=\"127.0.0.1\", udp_port=5001, ts_per_frame=4,\n\
+      \                 log_file=\"rx.log\"):\n        gr.sync_block.__init__(\n \
+      \           self, name=\"FPV Depacketizer\", in_sig=[np.uint8], out_sig=None\n\
+      \        )\n        self.udp_addr = udp_addr\n        self.udp_port = int(udp_port)\n\
+      \        self.payload_len = TS_PACKET_LEN * int(ts_per_frame)\n        self.body_len\
+      \ = 3 + self.payload_len + 4\n        self.frame_bits = (HEADER_LEN + self.body_len)\
+      \ * 8\n        self.log_file = log_file\n\n        self._whitening = whitening_sequence(self.body_len)\n\
+      \        sync_bits = np.unpackbits(np.frombuffer(SYNC_WORD, dtype=np.uint8))\n\
+      \        # +1/-1 form: the correlation peak equals 32 minus twice the bit errors.\n\
+      \        self._sync_pattern = sync_bits.astype(np.float32) * 2 - 1\n       \
+      \ self._sync_threshold = 32 - 2 * SYNC_MAX_ERRORS\n\n        self._lock = threading.Lock()\n\
+      \        self._sock = None\n        self._log = logging.getLogger(\"fpv_rx\"\
+      )\n        self._bits = np.zeros(0, dtype=np.uint8)\n        self._frame_locked\
+      \ = False\n        self._bad_frames = 0\n        self._last_seq = None\n   \
+      \     self._last_good_time = None\n        self._lost_since = None\n       \
+      \ self._in_sync = False\n        # (time, frames received, frames lost, payload\
+      \ bytes delivered)\n        self._history = collections.deque()\n        self._total_received\
+      \ = 0\n        self._total_lost = 0\n        self._total_crc_errors = 0\n  \
+      \      self._sync_losses = 0\n        self._sync_hits = 0\n        self._last_recovery_s\
+      \ = 0.0\n        # Set while the flow graph is not running; ends the status\
+      \ thread.\n        self.stopped = threading.Event()\n        self.stopped.set()\n\
+      \n    # The socket and the log are opened in start(), not in __init__, because\n\
+      \    # GNU Radio Companion creates the block once just to inspect its ports.\n\
+      \    def start(self):\n        self._log.setLevel(logging.INFO)\n        if\
+      \ self.log_file and not self._log.handlers:\n            handler = logging.FileHandler(self.log_file)\n\
+      \            handler.setFormatter(logging.Formatter(\"%(asctime)s %(levelname)s\
+      \ %(message)s\"))\n            self._log.addHandler(handler)\n        self._sock\
+      \ = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)\n        self._log.info(\n\
+      \            \"start: udp=%s:%d frame_bytes=%d\",\n            self.udp_addr,\
+      \ self.udp_port, self.frame_bits // 8,\n        )\n        self.stopped.clear()\n\
+      \        return True\n\n    def stop(self):\n        self.stopped.set()\n  \
+      \      if self._sock is not None:\n            self._sock.close()\n        \
+      \    self._sock = None\n        self._log.info(\n            \"stop: received=%d\
+      \ lost=%d crc_errors=%d sync_losses=%d\",\n            self._total_received,\
+      \ self._total_lost, self._total_crc_errors,\n            self._sync_losses,\n\
+      \        )\n        for handler in list(self._log.handlers):\n            handler.close()\n\
+      \            self._log.removeHandler(handler)\n        return True\n\n    #\
+      \ ---- values for the GUI (polled by Function Probe blocks) ----\n\n    def\
+      \ get_sync(self):\n        with self._lock:\n            self._update_sync(time.monotonic())\n\
+      \            return self._in_sync\n\n    def get_sync_text(self):\n        return\
+      \ \"LOCKED\" if self.get_sync() else \"NO SYNC\"\n\n    def get_bitrate_kbps(self):\n\
+      \        with self._lock:\n            self._trim_history(time.monotonic())\n\
+      \            payload_bytes = sum(item[3] for item in self._history)\n      \
+      \      return payload_bytes * 8 / STATS_WINDOW_S / 1000.0\n\n    def get_loss_percent(self):\n\
+      \        with self._lock:\n            self._trim_history(time.monotonic())\n\
+      \            received = sum(item[1] for item in self._history)\n           \
+      \ lost = sum(item[2] for item in self._history)\n            if received + lost\
+      \ == 0:\n                return 0.0\n            return 100.0 * lost / (received\
+      \ + lost)\n\n    def get_bitrate_text(self):\n        return \"%.0f kbit/s\"\
+      \ % self.get_bitrate_kbps()\n\n    def get_loss_text(self):\n        return\
+      \ \"%.1f %% (total lost: %d)\" % (self.get_loss_percent(), self._total_lost)\n\
+      \n    def get_total_received(self):\n        return self._total_received\n\n\
+      \    def get_total_lost(self):\n        return self._total_lost\n\n    def get_total_crc_errors(self):\n\
+      \        return self._total_crc_errors\n\n    def get_sync_losses(self):\n \
+      \       return self._sync_losses\n\n    def get_last_recovery_ms(self):\n  \
+      \      return self._last_recovery_s * 1000.0\n\n    def get_totals(self):\n\
+      \        \"\"\"Counters since the start, for the status line in the log.\"\"\
+      \"\n        with self._lock:\n            return dict(\n                received=self._total_received,\n\
+      \                lost=self._total_lost,\n                crc_errors=self._total_crc_errors,\n\
+      \                sync_hits=self._sync_hits,\n            )\n\n    # ---- statistics\
+      \ and link state ----\n\n    def _trim_history(self, now):\n        while self._history\
+      \ and now - self._history[0][0] > STATS_WINDOW_S:\n            self._history.popleft()\n\
+      \n    def _update_sync(self, now):\n        alive = (\n            self._last_good_time\
+      \ is not None\n            and now - self._last_good_time < SYNC_TIMEOUT_S\n\
+      \        )\n        if alive and not self._in_sync:\n            self._in_sync\
+      \ = True\n            if self._lost_since is None:\n                self._log.info(\"\
+      sync acquired\")\n            else:\n                self._last_recovery_s =\
+      \ now - self._lost_since\n                self._log.info(\n                \
+      \    \"sync recovered after %.0f ms without frames\",\n                    self._last_recovery_s\
+      \ * 1000.0,\n                )\n        elif not alive and self._in_sync:\n\
+      \            self._in_sync = False\n            self._sync_losses += 1\n   \
+      \         self._lost_since = self._last_good_time\n            self._log.warning(\"\
+      sync lost\")\n\n    def _handle_frame(self, body, now):\n        seq = (body[0]\
+      \ << 8) | body[1]\n        frame_type = body[2]\n\n        lost = 0\n      \
+      \  if self._last_seq is not None:\n            gap = (seq - self._last_seq -\
+      \ 1) & 0xFFFF\n            if gap > MAX_PLAUSIBLE_GAP:\n                self._log.info(\"\
+      sequence jump %d -> %d, transmitter restarted\", self._last_seq, seq)\n    \
+      \        elif gap > 0:\n                lost = gap\n                self._log.warning(\"\
+      lost %d frame(s) before seq %d\", gap, seq)\n        self._last_seq = seq\n\n\
+      \        delivered = 0\n        if frame_type == FRAME_TYPE_DATA:\n        \
+      \    payload = body[3:3 + self.payload_len]\n            try:\n            \
+      \    self._sock.sendto(payload, (self.udp_addr, self.udp_port))\n          \
+      \      delivered = len(payload)\n            except OSError as error:\n    \
+      \            self._log.error(\"udp send failed: %s\", error)\n\n        self._total_received\
+      \ += 1\n        self._total_lost += lost\n        self._last_good_time = now\n\
+      \        self._history.append((now, 1, lost, delivered))\n        self._update_sync(now)\n\
+      \n    # ---- frame sync ----\n\n    def _decode(self, frame_bits, strict_header):\n\
+      \        \"\"\"Returns the frame body if the frame is valid, otherwise None.\"\
+      \"\"\n        data = np.packbits(frame_bits)\n        if strict_header:\n  \
+      \          # While searching, a candidate must carry the right length in at\n\
+      \            # least one of the two copies; this rejects most false sync hits.\n\
+      \            first = (int(data[4]) << 8) | int(data[5])\n            second\
+      \ = (int(data[6]) << 8) | int(data[7])\n            if first != self.body_len\
+      \ and second != self.body_len:\n                return None\n        body =\
+      \ (data[HEADER_LEN:] ^ self._whitening).tobytes()\n        if zlib.crc32(body[:-4]).to_bytes(4,\
+      \ \"big\") != body[-4:]:\n            return None\n        return body\n\n \
+      \   def _search(self, now):\n        \"\"\"Looks for a valid frame anywhere\
+      \ in the buffer. True if one was found.\"\"\"\n        last_start = len(self._bits)\
+      \ - self.frame_bits\n        if last_start < 0:\n            return False\n\
+      \        window = self._bits[:last_start + 32].astype(np.float32) * 2 - 1\n\
+      \        score = np.correlate(window, self._sync_pattern, mode=\"valid\")\n\
+      \        for start in np.flatnonzero(score >= self._sync_threshold):\n     \
+      \       # Counted even if the frame turns out damaged: many hits without\n \
+      \           # good frames mean the signal is demodulated but too noisy.\n  \
+      \          self._sync_hits += 1\n            body = self._decode(self._bits[start:start\
+      \ + self.frame_bits], True)\n            if body is not None:\n            \
+      \    self._bits = self._bits[start + self.frame_bits:]\n                self._frame_locked\
+      \ = True\n                self._bad_frames = 0\n                self._log.info(\"\
+      frame sync found\")\n                self._handle_frame(body, now)\n       \
+      \         return True\n        # Nothing valid: keep only the tail that could\
+      \ not be checked yet.\n        self._bits = self._bits[last_start + 1:]\n  \
+      \      return False\n\n    def _track(self, now):\n        \"\"\"Takes the next\
+      \ frame at the expected position. False if more bits are needed.\"\"\"\n   \
+      \     if len(self._bits) < self.frame_bits:\n            return False\n    \
+      \    body = self._decode(self._bits[:self.frame_bits], False)\n        if body\
+      \ is not None:\n            self._bits = self._bits[self.frame_bits:]\n    \
+      \        self._bad_frames = 0\n            self._handle_frame(body, now)\n \
+      \           return True\n        self._total_crc_errors += 1\n        self._bad_frames\
+      \ += 1\n        if self._bad_frames >= MAX_BAD_FRAMES:\n            # The bit\
+      \ position may have slipped; search again from here.\n            self._frame_locked\
+      \ = False\n            self._log.warning(\"frame sync lost after %d bad frames\"\
+      , self._bad_frames)\n        else:\n            self._bits = self._bits[self.frame_bits:]\n\
+      \        return True\n\n    def work(self, input_items, output_items):\n   \
+      \     data = input_items[0]\n        now = time.monotonic()\n        with self._lock:\n\
+      \            self._bits = np.concatenate((self._bits, data & 1))\n         \
+      \   while True:\n                if self._frame_locked:\n                  \
+      \  if not self._track(now):\n                        break\n               \
+      \ elif not self._search(now):\n                    break\n            self._update_sync(now)\n\
+      \        return len(data)\n"
+    affinity: ''
+    alias: ''
+    comment: ''
+    log_file: '''rx.log'''
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    ts_per_frame: ts_per_frame
+    udp_addr: udp_out_addr
+    udp_port: udp_out_port
+  states:
+    _io_cache: ('FPV Depacketizer', 'blk', [('udp_addr', "'127.0.0.1'"), ('udp_port',
+      '5001'), ('ts_per_frame', '4'), ('log_file', "'rx.log'")], [('0', 'byte', 1)],
+      [], '', ['log_file', 'udp_addr', 'udp_port'])
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [3088, 944.0]
+    rotation: 0
+    state: enabled
+- name: diff_decoder
+  id: digital_diff_decoder_bb
+  parameters:
+    affinity: ''
+    alias: ''
+    coding: digital.DIFF_DIFFERENTIAL
+    comment: ''
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    modulus: '4'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1496, 960.0]
+    rotation: 0
+    state: enabled
+- name: fec_decoder
+  id: fec_extended_decoder
+  parameters:
+    affinity: ''
+    alias: ''
+    ann: None
+    comment: ''
+    decoder_list: cc_decoder
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    puncpat: '''11'''
+    threadtype: none
+    value: fec_extended_decoder
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [2648, 1000.0]
+    rotation: 0
+    state: enabled
+- name: link_monitor
+  id: snippet
+  parameters:
+    alias: ''
+    code: "# Writes the settings and, once per log period, the state of the link to\n\
+      # rx.log. The values are only read from the blocks, nothing is changed.\nimport\
+      \ logging\nimport math\nimport threading\nimport time\n\nimport numpy as np\n\
+      \n# Snapshots of the signal taken from the probes during one log period.\nSNAPSHOTS\
+      \ = 10\n# Full scale of the radio is 1.0. A sample this close to it counts as\
+      \ clipped.\nCLIP_LEVEL = 0.98\n# Written when there was nothing to measure.\n\
+      NO_SIGNAL_DB = -200.0\n\nlog = logging.getLogger(\"fpv_rx\")\nlog.info(\n  \
+      \  \"settings: center_freq=%d samp_rate=%d sps=%d excess_bw=%.2f ts_per_frame=%d\
+      \ \"\n    \"fec_enabled=%d fec_k=%d fec_polys=%s pluto_uri=%s rf_bandwidth=%d\
+      \ rx_gain=%.0f \"\n    \"max_freq_offset_hz=%.0f log_period_s=%.1f\",\n    self.center_freq,\
+      \ self.samp_rate, self.sps, self.excess_bw, self.ts_per_frame,\n    self.fec_enabled,\
+      \ self.fec_k, self.fec_polys, self.pluto_uri, self.rf_bandwidth,\n    self.rx_gain_slider,\
+      \ self.max_freq_offset_hz, self.log_period_s,\n)\n\ndef to_db(ratio):\n    return\
+      \ 10 * math.log10(ratio) if ratio > 0 and math.isfinite(ratio) else NO_SIGNAL_DB\n\
+      \ndef report_loop():\n    depacketizer = self.depacketizer\n    totals = depacketizer.get_totals()\n\
+      \    samples = self.pluto_rx.nitems_written(0)\n    last_time = time.monotonic()\n\
+      \    while True:\n        measured = clipped = 0\n        power = peak = ideal_power\
+      \ = error_power = 0.0\n        for _ in range(SNAPSHOTS):\n            # stopped\
+      \ is set when the flow graph stops, which ends this thread.\n            if\
+      \ depacketizer.stopped.wait(self.log_period_s / SNAPSHOTS):\n              \
+      \  return\n            # Signal as it comes from the radio.\n            data\
+      \ = np.array(self.rx_input_probe.level())\n            largest = np.maximum(np.abs(data.real),\
+      \ np.abs(data.imag))\n            measured += len(data)\n            power +=\
+      \ float(np.vdot(data, data).real)\n            peak = max(peak, float(largest.max()))\n\
+      \            clipped += int(np.count_nonzero(largest >= CLIP_LEVEL))\n     \
+      \       # Recovered symbols against the four QPSK points, which lie on the\n\
+      \            # diagonals at the mean amplitude.\n            symbols = np.array(self.rx_symbol_probe.level())\n\
+      \            amplitude = float(np.mean(np.abs(symbols)))\n            points\
+      \ = (np.sign(symbols.real) + 1j * np.sign(symbols.imag)) * amplitude / math.sqrt(2)\n\
+      \            ideal_power += amplitude * amplitude * len(symbols)\n         \
+      \   error_power += float(np.vdot(symbols - points, symbols - points).real)\n\
+      \n        now = time.monotonic()\n        elapsed = now - last_time\n      \
+      \  last_time = now\n        previous, previous_samples = totals, samples\n \
+      \       totals = depacketizer.get_totals()\n        samples = self.pluto_rx.nitems_written(0)\n\
+      \        # The loops report the correction they apply. The coarse loop runs\
+      \ at\n        # the sample rate and with the opposite sign, the fine loop at\
+      \ the\n        # symbol rate. Their sum is the frequency offset of the transmitter.\n\
+      \        symbol_rate = self.samp_rate / float(self.sps)\n        coarse_hz =\
+      \ -self.carrier_coarse.get_frequency() * self.samp_rate / (2 * math.pi)\n  \
+      \      fine_hz = self.carrier_fine.get_frequency() * symbol_rate / (2 * math.pi)\n\
+      \        log.info(\n            \"status: sync=%d samples=%.3f level_dbfs=%.1f\
+      \ peak=%.2f clipped=%.2f%% \"\n            \"rx_gain=%.0f agc_gain=%.1f freq_offset_hz=%.0f\
+      \ coarse_hz=%.0f fine_hz=%.0f \"\n            \"clock_rate=%.5f mer_db=%.1f\
+      \ frames=%d lost=%d crc_errors=%d sync_hits=%d \"\n            \"kbit=%.0f\"\
+      ,\n            depacketizer.get_sync(),\n            (samples - previous_samples)\
+      \ / (elapsed * self.samp_rate),\n            to_db(power / measured), peak,\
+      \ 100.0 * clipped / measured,\n            self.rx_gain_slider, self.agc.gain(),\n\
+      \            coarse_hz + fine_hz, coarse_hz, fine_hz,\n            self.clock_sync.clock_rate(),\n\
+      \            to_db(ideal_power / error_power) if error_power > 0 else NO_SIGNAL_DB,\n\
+      \            totals[\"received\"] - previous[\"received\"],\n            totals[\"\
+      lost\"] - previous[\"lost\"],\n            totals[\"crc_errors\"] - previous[\"\
+      crc_errors\"],\n            totals[\"sync_hits\"] - previous[\"sync_hits\"],\n\
+      \            depacketizer.get_bitrate_kbps(),\n        )\n\nif self.log_period_s\
+      \ > 0:\n    threading.Thread(target=report_loop, daemon=True).start()\n"
+    comment: ''
+    priority: '0'
+    section: main_after_start
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1032, 1464.0]
+    rotation: 0
+    state: enabled
+- name: pluto_rx
+  id: iio_pluto_source
+  parameters:
+    affinity: ''
+    alias: ''
+    bandwidth: rf_bandwidth
+    bbdc: 'True'
+    buffer_size: '32768'
+    comment: ''
+    filter: ''
+    filter_source: '''Auto'''
+    fpass: '0'
+    frequency: center_freq
+    fstop: '0'
+    gain1: '''manual'''
+    len_tag_key: packet_len
+    manual_gain1: rx_gain_slider
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    quadrature: 'True'
+    rfdc: 'True'
+    samplerate: samp_rate
+    type: fc32
+    uri: pluto_uri
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [32, 828.0]
+    rotation: 0
+    state: enabled
+- name: rx_constellation
+  id: qtgui_const_sink_x
+  parameters:
+    affinity: ''
+    alias: ''
+    alpha1: '1.0'
+    alpha10: '1.0'
+    alpha2: '1.0'
+    alpha3: '1.0'
+    alpha4: '1.0'
+    alpha5: '1.0'
+    alpha6: '1.0'
+    alpha7: '1.0'
+    alpha8: '1.0'
+    alpha9: '1.0'
+    autoscale: 'False'
+    axislabels: 'True'
+    color1: '"blue"'
+    color10: '"dark blue"'
+    color2: '"red"'
+    color3: '"green"'
+    color4: '"black"'
+    color5: '"cyan"'
+    color6: '"magenta"'
+    color7: '"yellow"'
+    color8: '"dark red"'
+    color9: '"dark green"'
+    comment: ''
+    grid: 'False'
+    gui_hint: 5,1,1,1
+    label1: ''
+    label10: ''
+    label2: ''
+    label3: ''
+    label4: ''
+    label5: ''
+    label6: ''
+    label7: ''
+    label8: ''
+    label9: ''
+    legend: 'True'
+    marker1: '0'
+    marker10: '0'
+    marker2: '0'
+    marker3: '0'
+    marker4: '0'
+    marker5: '0'
+    marker6: '0'
+    marker7: '0'
+    marker8: '0'
+    marker9: '0'
+    name: '"Constellation"'
+    nconnections: '1'
+    size: '1024'
+    style1: '0'
+    style10: '0'
+    style2: '0'
+    style3: '0'
+    style4: '0'
+    style5: '0'
+    style6: '0'
+    style7: '0'
+    style8: '0'
+    style9: '0'
+    tr_chan: '0'
+    tr_level: '0.0'
+    tr_mode: qtgui.TRIG_MODE_FREE
+    tr_slope: qtgui.TRIG_SLOPE_POS
+    tr_tag: '""'
+    type: complex
+    update_time: '0.10'
+    width1: '1'
+    width10: '1'
+    width2: '1'
+    width3: '1'
+    width4: '1'
+    width5: '1'
+    width6: '1'
+    width7: '1'
+    width8: '1'
+    width9: '1'
+    xmax: '2'
+    xmin: '-2'
+    ymax: '2'
+    ymin: '-2'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1280, 768.0]
+    rotation: 0
+    state: enabled
+- name: rx_fec_switch_in
+  id: blocks_selector
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    enabled: 'True'
+    input_index: '0'
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    num_inputs: '1'
+    num_outputs: '2'
+    output_index: 1 if fec_enabled else 0
+    showports: 'True'
+    type: byte
+    vlen: '1'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [2000, 936.0]
+    rotation: 0
+    state: enabled
+- name: rx_fec_switch_out
+  id: blocks_selector
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    enabled: 'True'
+    input_index: 1 if fec_enabled else 0
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    num_inputs: '2'
+    num_outputs: '1'
+    output_index: '0'
+    showports: 'True'
+    type: byte
+    vlen: '1'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [2896, 936.0]
+    rotation: 0
+    state: enabled
+- name: rx_input_probe
+  id: blocks_probe_signal_vx
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    type: complex
+    vlen: '4096'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [456, 1096.0]
+    rotation: 0
+    state: enabled
+- name: rx_input_vector
+  id: blocks_stream_to_vector
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    num_items: '4096'
+    type: complex
+    vlen: '1'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [280, 1112.0]
+    rotation: 0
+    state: enabled
+- name: rx_spectrum
+  id: qtgui_freq_sink_x
+  parameters:
+    affinity: ''
+    alias: ''
+    alpha1: '1.0'
+    alpha10: '1.0'
+    alpha2: '1.0'
+    alpha3: '1.0'
+    alpha4: '1.0'
+    alpha5: '1.0'
+    alpha6: '1.0'
+    alpha7: '1.0'
+    alpha8: '1.0'
+    alpha9: '1.0'
+    autoscale: 'False'
+    average: '1.0'
+    axislabels: 'True'
+    bw: samp_rate
+    color1: '"blue"'
+    color10: '"dark blue"'
+    color2: '"red"'
+    color3: '"green"'
+    color4: '"black"'
+    color5: '"cyan"'
+    color6: '"magenta"'
+    color7: '"yellow"'
+    color8: '"dark red"'
+    color9: '"dark green"'
+    comment: ''
+    ctrlpanel: 'False'
+    fc: center_freq
+    fftsize: '1024'
+    freqhalf: 'True'
+    grid: 'False'
+    gui_hint: 5,0,1,1
+    label: Relative Gain
+    label1: ''
+    label10: ''''''
+    label2: ''''''
+    label3: ''''''
+    label4: ''''''
+    label5: ''''''
+    label6: ''''''
+    label7: ''''''
+    label8: ''''''
+    label9: ''''''
+    legend: 'True'
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    name: '"RX spectrum"'
+    nconnections: '1'
+    norm_window: 'False'
+    showports: 'False'
+    tr_chan: '0'
+    tr_level: '0.0'
+    tr_mode: qtgui.TRIG_MODE_FREE
+    tr_tag: '""'
+    type: complex
+    units: dB
+    update_time: '0.10'
+    width1: '1'
+    width10: '1'
+    width2: '1'
+    width3: '1'
+    width4: '1'
+    width5: '1'
+    width6: '1'
+    width7: '1'
+    width8: '1'
+    width9: '1'
+    wintype: window.WIN_BLACKMAN_hARRIS
+    ymax: '10'
+    ymin: '-140'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [280, 1000.0]
+    rotation: 0
+    state: enabled
+- name: rx_symbol_probe
+  id: blocks_probe_signal_vx
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    type: complex
+    vlen: '4096'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1464, 680.0]
+    rotation: 0
+    state: enabled
+- name: rx_symbol_vector
+  id: blocks_stream_to_vector
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    num_items: '4096'
+    type: complex
+    vlen: '1'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1280, 680.0]
+    rotation: 0
+    state: enabled
+- name: soft_offset
+  id: blocks_add_const_vxx
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    const: '-1'
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    type: float
+    vlen: '1'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [2512, 1024.0]
+    rotation: 0
+    state: enabled
+- name: soft_scale
+  id: blocks_multiply_const_vxx
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    const: '2'
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    type: float
+    vlen: '1'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [2360, 1024.0]
+    rotation: 0
+    state: enabled
+- name: symbol_decoder
+  id: digital_constellation_decoder_cb
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    constellation: qpsk
+    maxoutbuf: '0'
+    minoutbuf: '0'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1264, 968.0]
+    rotation: 0
+    state: enabled
+- name: symbol_map
+  id: digital_map_bb
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    map: '[0, 1, 3, 2]'
+    maxoutbuf: '0'
+    minoutbuf: '0'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1688, 968.0]
+    rotation: 0
+    state: enabled
+- name: symbols_to_bits
+  id: blocks_unpack_k_bits_bb
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    k: '2'
+    maxoutbuf: '0'
+    minoutbuf: '0'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1848, 968.0]
+    rotation: 0
+    state: enabled
+
+connections:
+- [agc, '0', carrier_coarse, '0']
+- [bits_to_float, '0', soft_scale, '0']
+- [carrier_coarse, '0', clock_sync, '0']
+- [carrier_fine, '0', rx_constellation, '0']
+- [carrier_fine, '0', rx_symbol_vector, '0']
+- [carrier_fine, '0', symbol_decoder, '0']
+- [clock_sync, '0', carrier_fine, '0']
+- [diff_decoder, '0', symbol_map, '0']
+- [fec_decoder, '0', rx_fec_switch_out, '1']
+- [pluto_rx, '0', agc, '0']
+- [pluto_rx, '0', rx_input_vector, '0']
+- [pluto_rx, '0', rx_spectrum, '0']
+- [rx_fec_switch_in, '0', rx_fec_switch_out, '0']
+- [rx_fec_switch_in, '1', bits_to_float, '0']
+- [rx_fec_switch_out, '0', depacketizer, '0']
+- [rx_input_vector, '0', rx_input_probe, '0']
+- [rx_symbol_vector, '0', rx_symbol_probe, '0']
+- [soft_offset, '0', fec_decoder, '0']
+- [soft_scale, '0', soft_offset, '0']
+- [symbol_decoder, '0', diff_decoder, '0']
+- [symbol_map, '0', symbols_to_bits, '0']
+- [symbols_to_bits, '0', rx_fec_switch_in, '0']
+
+metadata:
+  file_format: 1
+  grc_version: 3.10.12.0

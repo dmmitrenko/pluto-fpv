@@ -1,0 +1,886 @@
+options:
+  parameters:
+    author: ''
+    catch_exceptions: 'True'
+    category: '[GRC Hier Blocks]'
+    cmake_opt: ''
+    comment: ''
+    copyright: ''
+    description: ''
+    gen_cmake: 'On'
+    gen_linking: dynamic
+    generate_options: qt_gui
+    hier_block_src_path: '.:'
+    id: fpv_tx
+    max_nouts: '0'
+    output_language: python
+    placement: (0,0)
+    qt_qss_theme: ''
+    realtime_scheduling: ''
+    run: 'True'
+    run_command: '{python} -u {filename}'
+    run_options: prompt
+    sizing_mode: fixed
+    thread_safe_setters: ''
+    title: fpv_tx
+    window_size: (1000,1000)
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [240, 336.0]
+    rotation: 0
+    state: enabled
+
+blocks:
+- name: cc_encoder
+  id: variable_cc_encoder_def
+  parameters:
+    comment: ''
+    dim1: '1'
+    dim2: '1'
+    framebits: '2048'
+    k: fec_k
+    mode: fec.CC_STREAMING
+    ndim: '0'
+    padding: 'False'
+    polys: fec_poly_list
+    rate: '2'
+    state_start: '0'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [640, 780.0]
+    rotation: 0
+    state: enabled
+- name: center_freq
+  id: variable_config
+  parameters:
+    comment: ''
+    config_file: common.ini
+    option: center_freq
+    section: main
+    type: int
+    value: '2420000000'
+    writeback: None
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1896, 8.0]
+    rotation: 0
+    state: enabled
+- name: excess_bw
+  id: variable_config
+  parameters:
+    comment: ''
+    config_file: common.ini
+    option: excess_bw
+    section: main
+    type: real
+    value: '0.35'
+    writeback: None
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1280, 8.0]
+    rotation: 0
+    state: enabled
+- name: fec_enabled
+  id: variable_config
+  parameters:
+    comment: ''
+    config_file: common.ini
+    option: fec_enabled
+    section: main
+    type: int
+    value: '1'
+    writeback: None
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [624, 8.0]
+    rotation: 0
+    state: enabled
+- name: fec_k
+  id: variable_config
+  parameters:
+    comment: ''
+    config_file: common.ini
+    option: fec_k
+    section: main
+    type: int
+    value: '7'
+    writeback: None
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [760, 8.0]
+    rotation: 0
+    state: enabled
+- name: fec_poly_list
+  id: variable
+  parameters:
+    comment: ''
+    value: '[int(p) for p in fec_polys.split('','')]'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [760, 160.0]
+    rotation: 0
+    state: enabled
+- name: fec_polys
+  id: variable_config
+  parameters:
+    comment: ''
+    config_file: common.ini
+    option: '''fec_polys'''
+    section: main
+    type: string
+    value: 79,109
+    writeback: None
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [624, 160.0]
+    rotation: 0
+    state: enabled
+- name: log_period_s
+  id: variable_config
+  parameters:
+    comment: ''
+    config_file: tx.ini
+    option: log_period_s
+    section: main
+    type: real
+    value: '1'
+    writeback: None
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [8, 320.0]
+    rotation: 0
+    state: enabled
+- name: max_latency_ms
+  id: variable_config
+  parameters:
+    comment: ''
+    config_file: tx.ini
+    option: max_latency_ms
+    section: main
+    type: real
+    value: '40'
+    writeback: None
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [8, 160.0]
+    rotation: 0
+    state: enabled
+- name: mode_label
+  id: variable_qtgui_label
+  parameters:
+    comment: ''
+    formatter: None
+    gui_hint: 1,0,1,2
+    label: '''Modulation'''
+    type: string
+    value: modulation_text
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1400, 1128.0]
+    rotation: 0
+    state: enabled
+- name: modulation_text
+  id: variable
+  parameters:
+    comment: ''
+    value: ('QPSK + CC 1/2, K=%d' % fec_k) if fec_enabled else 'QPSK, FEC off'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1400, 1056.0]
+    rotation: 0
+    state: enabled
+- name: pluto_uri
+  id: variable_config
+  parameters:
+    comment: ''
+    config_file: tx.ini
+    option: '''pluto_uri'''
+    section: main
+    type: string
+    value: ip:192.168.2.1
+    writeback: None
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1872, 160.0]
+    rotation: 0
+    state: enabled
+- name: qpsk
+  id: variable_constellation
+  parameters:
+    comment: ''
+    const_points: '[-1-1j, -1+1j, 1+1j, 1-1j]'
+    dims: '1'
+    normalization: digital.constellation.AMPLITUDE_NORMALIZATION
+    npwr: '1.0'
+    precision: '8'
+    rot_sym: '4'
+    soft_dec_lut: None
+    sym_map: '[0, 1, 3, 2]'
+    type: calcdist
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1280, 720.0]
+    rotation: 0
+    state: enabled
+- name: rf_bandwidth
+  id: variable_config
+  parameters:
+    comment: ''
+    config_file: tx.ini
+    option: rf_bandwidth
+    section: main
+    type: int
+    value: '2000000'
+    writeback: None
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1752, 144.0]
+    rotation: 0
+    state: enabled
+- name: samp_rate
+  id: variable_config
+  parameters:
+    comment: ''
+    config_file: common.ini
+    option: samp_rate
+    section: main
+    type: int
+    value: '2000000'
+    writeback: None
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [264, 80.0]
+    rotation: 0
+    state: enabled
+- name: samples_per_frame
+  id: variable
+  parameters:
+    comment: ''
+    value: (188*ts_per_frame + 15) * 8 * (2 if fec_enabled else 1) / 2.0 * sps
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [264, 8.0]
+    rotation: 0
+    state: enabled
+- name: sps
+  id: variable_config
+  parameters:
+    comment: ''
+    config_file: common.ini
+    option: sps
+    section: main
+    type: int
+    value: '2'
+    writeback: None
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1280, 160.0]
+    rotation: 0
+    state: enabled
+- name: ts_per_frame
+  id: variable_config
+  parameters:
+    comment: ''
+    config_file: common.ini
+    option: ts_per_frame
+    section: main
+    type: int
+    value: '4'
+    writeback: None
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [128, 8.0]
+    rotation: 0
+    state: enabled
+- name: tx_att_slider
+  id: variable_qtgui_range
+  parameters:
+    comment: ''
+    gui_hint: 0,0,1,2
+    label: '''TX attenuation, dB'''
+    min_len: '200'
+    orient: QtCore.Qt.Horizontal
+    rangeType: float
+    start: '0'
+    step: '0.25'
+    stop: '89.75'
+    value: tx_attenuation_cfg
+    widget: counter_slider
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1752, 8.0]
+    rotation: 0
+    state: enabled
+- name: tx_attenuation_cfg
+  id: variable_config
+  parameters:
+    comment: ''
+    config_file: tx.ini
+    option: tx_attenuation
+    section: main
+    type: real
+    value: '30'
+    writeback: None
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1280, 1056.0]
+    rotation: 0
+    state: enabled
+- name: tx_consumed
+  id: variable_function_probe
+  parameters:
+    block_id: pluto_tx
+    comment: ''
+    function_args: '0'
+    function_name: nitems_read
+    poll_rate: '100'
+    value: '0'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [240, 232.0]
+    rotation: 0
+    state: enabled
+- name: tx_level
+  id: variable_config
+  parameters:
+    comment: ''
+    config_file: tx.ini
+    option: tx_level
+    section: main
+    type: real
+    value: '0.5'
+    writeback: None
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1496, 8.0]
+    rotation: 0
+    state: enabled
+- name: udp_in_port
+  id: variable_config
+  parameters:
+    comment: ''
+    config_file: tx.ini
+    option: udp_in_port
+    section: main
+    type: int
+    value: '5000'
+    writeback: None
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [8, 8.0]
+    rotation: 0
+    state: enabled
+- name: fec_encoder
+  id: fec_extended_encoder
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    encoder_list: cc_encoder
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    puncpat: '''11'''
+    threadtype: none
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [648, 680.0]
+    rotation: 0
+    state: enabled
+- name: link_monitor
+  id: snippet
+  parameters:
+    alias: ''
+    code: "# Writes the settings and, once per log period, the state of the transmitter\n\
+      # to tx.log. The values are only read from the blocks, nothing is changed.\n\
+      import logging\nimport threading\nimport time\n\nlog = logging.getLogger(\"\
+      fpv_tx\")\nlog.info(\n    \"settings: center_freq=%d samp_rate=%d sps=%d excess_bw=%.2f\
+      \ ts_per_frame=%d \"\n    \"fec_enabled=%d fec_k=%d fec_polys=%s pluto_uri=%s\
+      \ rf_bandwidth=%d \"\n    \"tx_attenuation=%.2f tx_level=%.2f max_latency_ms=%.0f\
+      \ log_period_s=%.1f\",\n    self.center_freq, self.samp_rate, self.sps, self.excess_bw,\
+      \ self.ts_per_frame,\n    self.fec_enabled, self.fec_k, self.fec_polys, self.pluto_uri,\
+      \ self.rf_bandwidth,\n    self.tx_att_slider, self.tx_level, self.max_latency_ms,\
+      \ self.log_period_s,\n)\n\ndef report_loop():\n    packetizer = self.packetizer\n\
+      \    totals = packetizer.get_totals()\n    samples = self.pluto_tx.nitems_read(0)\n\
+      \    last_time = time.monotonic()\n    # stopped is set when the flow graph\
+      \ stops, which ends this thread.\n    while not packetizer.stopped.wait(self.log_period_s):\n\
+      \        now = time.monotonic()\n        elapsed = now - last_time\n       \
+      \ last_time = now\n        previous, previous_samples = totals, samples\n  \
+      \      totals = packetizer.get_totals()\n        samples = self.pluto_tx.nitems_read(0)\n\
+      \        log.info(\n            \"status: samples=%.3f data_frames=%d idle_frames=%d\
+      \ input_kbit=%.0f \"\n            \"queue_bytes=%d dropped_bytes=%d waiting_ms=%.0f\
+      \ tx_attenuation=%.2f\",\n            (samples - previous_samples) / (elapsed\
+      \ * self.samp_rate),\n            totals[\"data_frames\"] - previous[\"data_frames\"\
+      ],\n            totals[\"idle_frames\"] - previous[\"idle_frames\"],\n     \
+      \       (totals[\"input_bytes\"] - previous[\"input_bytes\"]) * 8 / elapsed\
+      \ / 1000.0,\n            totals[\"queue_bytes\"],\n            totals[\"dropped_bytes\"\
+      ] - previous[\"dropped_bytes\"],\n            totals[\"waiting_ms\"],\n    \
+      \        self.tx_att_slider,\n        )\n\nif self.log_period_s > 0:\n    threading.Thread(target=report_loop,\
+      \ daemon=True).start()\n"
+    comment: ''
+    priority: '0'
+    section: main_after_start
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [8, 800.0]
+    rotation: 0
+    state: enabled
+- name: packetizer
+  id: epy_block
+  parameters:
+    _source_code: "\"\"\"\nFPV Packetizer (source block).\n\nReads MPEG-TS bytes from\
+      \ a UDP port and produces a continuous stream of\nlink frames:\n\n    [ sync\
+      \ 32 bit | length 16 bit | length 16 bit | seq 16 bit | type 8 bit | payload\
+      \ | CRC32 ]\n                                                  |<------------\
+      \ whitened ------------>|\n\n- sync:    fixed word, marks the start of a frame;\n\
+      - length:  number of bytes after the header, sent twice (the receiver uses it\n\
+      \           to reject false sync hits);\n- seq:     frame counter, lets the\
+      \ receiver count lost frames;\n- type:    1 = video data, 0 = idle frame;\n\
+      - payload: ts_per_frame MPEG-TS packets (188 bytes each);\n- CRC32:   over seq,\
+      \ type and payload.\n\nIdle frames are sent when there is no video data, so\
+      \ the RF signal stays\ncontinuous and the receiver loops stay locked.\n\nLatency\
+      \ control: GNU Radio buffers would happily store seconds of frames\nbetween\
+      \ this block and the radio. To avoid that, the block is told how many\nsamples\
+      \ the radio has already taken (consumed_samples, updated by a Function\nProbe)\
+      \ and only produces a new frame while less than max_latency_ms of\nsignal is\
+      \ waiting in the transmit chain.\n\"\"\"\n\nimport logging\nimport socket\n\
+      import threading\nimport time\nimport zlib\n\nimport numpy as np\nfrom gnuradio\
+      \ import gr\n\nTS_PACKET_LEN = 188\nSYNC_WORD = bytes([0xE1, 0x5A, 0xE8, 0x93])\n\
+      FRAME_TYPE_IDLE = 0\nFRAME_TYPE_DATA = 1\n# MPEG-TS null packet (PID 0x1FFF);\
+      \ players ignore it.\nTS_NULL_PACKET = bytes([0x47, 0x1F, 0xFF, 0x10]) + bytes([0xFF])\
+      \ * 184\n# Queue limit in frames. At ~1 Mbit/s 64 frames is about 0.4 s of video.\n\
+      MAX_QUEUE_FRAMES = 64\n# Data that does not fill a whole frame is padded and\
+      \ sent after this time.\nMAX_PARTIAL_WAIT_S = 0.02\n# How long the consumed_samples\
+      \ value may be extrapolated without an update.\nMAX_EXTRAPOLATION_S = 0.1\n\
+      # Longest time work() waits for the radio before producing a frame anyway.\n\
+      MAX_WAIT_S = 0.2\n\n\ndef whitening_sequence(length):\n    \"\"\"Pseudo-random\
+      \ bytes from the LFSR x^7 + x^4 + 1, all-ones start.\"\"\"\n    state = 0x7F\n\
+      \    out = bytearray(length)\n    for i in range(length):\n        value = 0\n\
+      \        for _ in range(8):\n            bit = ((state >> 6) ^ (state >> 3))\
+      \ & 1\n            state = ((state << 1) | bit) & 0x7F\n            value =\
+      \ (value << 1) | bit\n        out[i] = value\n    return np.frombuffer(bytes(out),\
+      \ dtype=np.uint8)\n\n\nclass blk(gr.sync_block):\n    def __init__(self, udp_port=5000,\
+      \ ts_per_frame=4, log_file=\"tx.log\",\n                 samples_per_frame=0.0,\
+      \ samp_rate=2000000, max_latency_ms=40.0,\n                 consumed_samples=0):\n\
+      \        gr.sync_block.__init__(\n            self, name=\"FPV Packetizer\"\
+      , in_sig=None, out_sig=[np.uint8]\n        )\n        self.udp_port = int(udp_port)\n\
+      \        self.payload_len = TS_PACKET_LEN * int(ts_per_frame)\n        self.body_len\
+      \ = 3 + self.payload_len + 4\n        self.log_file = log_file\n        # samples_per_frame\
+      \ = 0 switches the latency control off.\n        self.samples_per_frame = float(samples_per_frame)\n\
+      \        self.samp_rate = float(samp_rate)\n        self.max_latency_ms = float(max_latency_ms)\n\
+      \n        length = bytes([self.body_len >> 8, self.body_len & 0xFF])\n     \
+      \   self._header = SYNC_WORD + length + length\n        self._whitening = whitening_sequence(self.body_len)\n\
+      \        self._idle_payload = bytes(self.payload_len)\n        self._lock =\
+      \ threading.Lock()\n        self._consumed = 0\n        self._consumed_time\
+      \ = time.monotonic()\n        self._sock = None\n        self._log = logging.getLogger(\"\
+      fpv_tx\")\n        self._queue = bytearray()\n        self._queue_time = None\n\
+      \        self._pending = b\"\"\n        self._seq = 0\n        self._frames\
+      \ = 0\n        self._dropped_bytes = 0\n        self._data_frames = 0\n    \
+      \    self._idle_frames = 0\n        self._input_bytes = 0\n        # Set while\
+      \ the flow graph is not running; ends the status thread.\n        self.stopped\
+      \ = threading.Event()\n        self.stopped.set()\n\n    @property\n    def\
+      \ consumed_samples(self):\n        return self._consumed\n\n    @consumed_samples.setter\n\
+      \    def consumed_samples(self, value):\n        with self._lock:\n        \
+      \    if value != self._consumed:\n                self._consumed = value\n \
+      \               self._consumed_time = time.monotonic()\n\n    # The socket and\
+      \ the log are opened in start(), not in __init__, because\n    # GNU Radio Companion\
+      \ creates the block once just to inspect its ports.\n    def start(self):\n\
+      \        self._log.setLevel(logging.INFO)\n        if self.log_file and not\
+      \ self._log.handlers:\n            handler = logging.FileHandler(self.log_file)\n\
+      \            handler.setFormatter(logging.Formatter(\"%(asctime)s %(levelname)s\
+      \ %(message)s\"))\n            self._log.addHandler(handler)\n\n        self._sock\
+      \ = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)\n        self._sock.setsockopt(socket.SOL_SOCKET,\
+      \ socket.SO_RCVBUF, 1 << 20)\n        self._sock.bind((\"0.0.0.0\", self.udp_port))\n\
+      \        self._sock.setblocking(False)\n        self._log.info(\n          \
+      \  \"start: udp_port=%d frame_bytes=%d payload_bytes=%d max_latency_ms=%.0f\"\
+      ,\n            self.udp_port, len(self._header) + self.body_len, self.payload_len,\n\
+      \            self.max_latency_ms,\n        )\n        self.stopped.clear()\n\
+      \        return True\n\n    def stop(self):\n        self.stopped.set()\n  \
+      \      if self._sock is not None:\n            self._sock.close()\n        \
+      \    self._sock = None\n        self._log.info(\n            \"stop: data_frames=%d\
+      \ idle_frames=%d dropped_bytes=%d\",\n            self._data_frames, self._idle_frames,\
+      \ self._dropped_bytes,\n        )\n        for handler in list(self._log.handlers):\n\
+      \            handler.close()\n            self._log.removeHandler(handler)\n\
+      \        return True\n\n    def get_data_frames(self):\n        return self._data_frames\n\
+      \n    def get_idle_frames(self):\n        return self._idle_frames\n\n    def\
+      \ get_dropped_bytes(self):\n        return self._dropped_bytes\n\n    def get_totals(self):\n\
+      \        \"\"\"Counters since the start, for the status line in the log.\"\"\
+      \"\n        with self._lock:\n            consumed = self._consumed\n      \
+      \  waiting = self._frames * self.samples_per_frame - consumed\n        return\
+      \ dict(\n            data_frames=self._data_frames,\n            idle_frames=self._idle_frames,\n\
+      \            input_bytes=self._input_bytes,\n            dropped_bytes=self._dropped_bytes,\n\
+      \            queue_bytes=len(self._queue),\n            waiting_ms=waiting /\
+      \ self.samp_rate * 1000.0,\n        )\n\n    def _read_socket(self):\n     \
+      \   while True:\n            try:\n                data = self._sock.recv(65536)\n\
+      \            except OSError:\n                break\n            if not self._queue:\n\
+      \                self._queue_time = time.monotonic()\n            self._queue\
+      \ += data\n            self._input_bytes += len(data)\n        # Input is faster\
+      \ than the radio link: drop the oldest TS packets,\n        # whole packets\
+      \ only, so the stream stays aligned to 188 bytes.\n        limit = self.payload_len\
+      \ * MAX_QUEUE_FRAMES\n        if len(self._queue) > limit:\n            excess\
+      \ = len(self._queue) - limit\n            excess += (-excess) % TS_PACKET_LEN\n\
+      \            del self._queue[:excess]\n            if self._dropped_bytes ==\
+      \ 0:\n                self._log.warning(\"input queue overflow, dropping oldest\
+      \ data\")\n            self._dropped_bytes += excess\n\n    def _may_start_frame(self):\n\
+      \        if self.samples_per_frame <= 0:\n            return True\n        with\
+      \ self._lock:\n            since_update = min(time.monotonic() - self._consumed_time,\
+      \ MAX_EXTRAPOLATION_S)\n            consumed = self._consumed + since_update\
+      \ * self.samp_rate\n        waiting = self._frames * self.samples_per_frame\
+      \ - consumed\n        return waiting < self.max_latency_ms * 1e-3 * self.samp_rate\n\
+      \n    def _take_payload(self):\n        \"\"\"Returns the payload of the next\
+      \ data frame, or None for an idle frame.\"\"\"\n        now = time.monotonic()\n\
+      \        if len(self._queue) >= self.payload_len:\n            payload = bytes(self._queue[:self.payload_len])\n\
+      \            del self._queue[:self.payload_len]\n            self._queue_time\
+      \ = now\n            return payload\n        whole = len(self._queue) - len(self._queue)\
+      \ % TS_PACKET_LEN\n        if whole and now - self._queue_time > MAX_PARTIAL_WAIT_S:\n\
+      \            # Do not let the last packets of a burst wait for more data.\n\
+      \            payload = bytes(self._queue[:whole])\n            del self._queue[:whole]\n\
+      \            self._queue_time = now\n            missing = (self.payload_len\
+      \ - whole) // TS_PACKET_LEN\n            return payload + TS_NULL_PACKET * missing\n\
+      \        return None\n\n    def _next_frame(self):\n        payload = self._take_payload()\n\
+      \        if payload is None:\n            frame_type = FRAME_TYPE_IDLE\n   \
+      \         payload = self._idle_payload\n            self._idle_frames += 1\n\
+      \        else:\n            frame_type = FRAME_TYPE_DATA\n            self._data_frames\
+      \ += 1\n        body = bytes([self._seq >> 8, self._seq & 0xFF, frame_type])\
+      \ + payload\n        body += zlib.crc32(body).to_bytes(4, \"big\")\n       \
+      \ self._seq = (self._seq + 1) & 0xFFFF\n        self._frames += 1\n        whitened\
+      \ = np.frombuffer(body, dtype=np.uint8) ^ self._whitening\n        return self._header\
+      \ + whitened.tobytes()\n\n    def work(self, input_items, output_items):\n \
+      \       out = output_items[0]\n        produced = 0\n        while produced\
+      \ < len(out):\n            if not self._pending:\n                if not self._may_start_frame():\n\
+      \                    if produced > 0:\n                        break\n     \
+      \               self._wait_for_room()\n                self._read_socket()\n\
+      \                self._pending = self._next_frame()\n            count = min(len(out)\
+      \ - produced, len(self._pending))\n            out[produced:produced + count]\
+      \ = np.frombuffer(\n                self._pending, dtype=np.uint8, count=count\n\
+      \            )\n            self._pending = self._pending[count:]\n        \
+      \    produced += count\n        return produced\n\n    def _wait_for_room(self):\n\
+      \        # A source block must never return zero items (GNU Radio would treat\n\
+      \        # it as finished), so wait here until the radio has taken enough\n\
+      \        # samples. The timeout keeps the flow graph responsive to stop().\n\
+      \        deadline = time.monotonic() + MAX_WAIT_S\n        while not self._may_start_frame()\
+      \ and time.monotonic() < deadline:\n            time.sleep(0.001)\n"
+    affinity: ''
+    alias: ''
+    comment: ''
+    consumed_samples: tx_consumed
+    log_file: '''tx.log'''
+    max_latency_ms: max_latency_ms
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    samp_rate: samp_rate
+    samples_per_frame: samples_per_frame
+    ts_per_frame: ts_per_frame
+    udp_port: udp_in_port
+  states:
+    _io_cache: ('FPV Packetizer', 'blk', [('udp_port', '5000'), ('ts_per_frame', '4'),
+      ('log_file', "'tx.log'"), ('samples_per_frame', '0.0'), ('samp_rate', '2000000'),
+      ('max_latency_ms', '40.0'), ('consumed_samples', '0')], [], [('0', 'byte', 1)],
+      '', ['consumed_samples', 'log_file', 'max_latency_ms', 'samp_rate', 'samples_per_frame',
+      'udp_port'])
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [0, 584.0]
+    rotation: 0
+    state: enabled
+- name: pluto_tx
+  id: iio_pluto_sink
+  parameters:
+    affinity: ''
+    alias: ''
+    attenuation1: tx_att_slider
+    bandwidth: rf_bandwidth
+    buffer_size: '32768'
+    comment: ''
+    cyclic: 'False'
+    filter: ''
+    filter_source: '''Auto'''
+    fpass: '0'
+    frequency: center_freq
+    fstop: '0'
+    len_tag_key: ''
+    samplerate: samp_rate
+    type: fc32
+    uri: pluto_uri
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1696, 504.0]
+    rotation: 0
+    state: enabled
+- name: qpsk_mod
+  id: digital_constellation_modulator
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    constellation: qpsk
+    differential: 'True'
+    excess_bw: excess_bw
+    log: 'False'
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    samples_per_symbol: sps
+    truncate: 'False'
+    verbose: 'False'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1280, 608.0]
+    rotation: 0
+    state: enabled
+- name: tx_bits_to_bytes
+  id: blocks_repack_bits_bb
+  parameters:
+    affinity: ''
+    alias: ''
+    align_output: 'False'
+    comment: ''
+    endianness: gr.GR_MSB_FIRST
+    k: '1'
+    l: '8'
+    len_tag_key: '""'
+    maxoutbuf: '0'
+    minoutbuf: '0'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1088, 624.0]
+    rotation: 0
+    state: enabled
+- name: tx_bytes_to_bits
+  id: blocks_repack_bits_bb
+  parameters:
+    affinity: ''
+    alias: ''
+    align_output: 'False'
+    comment: ''
+    endianness: gr.GR_MSB_FIRST
+    k: '8'
+    l: '1'
+    len_tag_key: '""'
+    maxoutbuf: '0'
+    minoutbuf: '0'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [232, 624.0]
+    rotation: 0
+    state: enabled
+- name: tx_fec_switch_in
+  id: blocks_selector
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    enabled: 'True'
+    input_index: '0'
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    num_inputs: '1'
+    num_outputs: '2'
+    output_index: 1 if fec_enabled else 0
+    showports: 'True'
+    type: byte
+    vlen: '1'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [440, 600.0]
+    rotation: 0
+    state: enabled
+- name: tx_fec_switch_out
+  id: blocks_selector
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    enabled: 'True'
+    input_index: 1 if fec_enabled else 0
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    num_inputs: '2'
+    num_outputs: '1'
+    output_index: '0'
+    showports: 'True'
+    type: byte
+    vlen: '1'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [896, 600.0]
+    rotation: 0
+    state: enabled
+- name: tx_scale
+  id: blocks_multiply_const_vxx
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    const: tx_level
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    type: complex
+    vlen: '1'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1504, 632.0]
+    rotation: 0
+    state: enabled
+- name: tx_spectrum
+  id: qtgui_freq_sink_x
+  parameters:
+    affinity: ''
+    alias: ''
+    alpha1: '1.0'
+    alpha10: '1.0'
+    alpha2: '1.0'
+    alpha3: '1.0'
+    alpha4: '1.0'
+    alpha5: '1.0'
+    alpha6: '1.0'
+    alpha7: '1.0'
+    alpha8: '1.0'
+    alpha9: '1.0'
+    autoscale: 'False'
+    average: '1.0'
+    axislabels: 'True'
+    bw: samp_rate
+    color1: '"blue"'
+    color10: '"dark blue"'
+    color2: '"red"'
+    color3: '"green"'
+    color4: '"black"'
+    color5: '"cyan"'
+    color6: '"magenta"'
+    color7: '"yellow"'
+    color8: '"dark red"'
+    color9: '"dark green"'
+    comment: ''
+    ctrlpanel: 'False'
+    fc: center_freq
+    fftsize: '1024'
+    freqhalf: 'True'
+    grid: 'False'
+    gui_hint: 2,0,1,2
+    label: Relative Gain
+    label1: ''
+    label10: ''''''
+    label2: ''''''
+    label3: ''''''
+    label4: ''''''
+    label5: ''''''
+    label6: ''''''
+    label7: ''''''
+    label8: ''''''
+    label9: ''''''
+    legend: 'True'
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    name: '"TX spectrum"'
+    nconnections: '1'
+    norm_window: 'False'
+    showports: 'False'
+    tr_chan: '0'
+    tr_level: '0.0'
+    tr_mode: qtgui.TRIG_MODE_FREE
+    tr_tag: '""'
+    type: complex
+    units: dB
+    update_time: '0.10'
+    width1: '1'
+    width10: '1'
+    width2: '1'
+    width3: '1'
+    width4: '1'
+    width5: '1'
+    width6: '1'
+    width7: '1'
+    width8: '1'
+    width9: '1'
+    wintype: window.WIN_BLACKMAN_hARRIS
+    ymax: '10'
+    ymin: '-140'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1696, 744.0]
+    rotation: 0
+    state: enabled
+
+connections:
+- [fec_encoder, '0', tx_fec_switch_out, '1']
+- [packetizer, '0', tx_bytes_to_bits, '0']
+- [qpsk_mod, '0', tx_scale, '0']
+- [tx_bits_to_bytes, '0', qpsk_mod, '0']
+- [tx_bytes_to_bits, '0', tx_fec_switch_in, '0']
+- [tx_fec_switch_in, '0', tx_fec_switch_out, '0']
+- [tx_fec_switch_in, '1', fec_encoder, '0']
+- [tx_fec_switch_out, '0', tx_bits_to_bytes, '0']
+- [tx_scale, '0', pluto_tx, '0']
+- [tx_scale, '0', tx_spectrum, '0']
+
+metadata:
+  file_format: 1
+  grc_version: 3.10.12.0
