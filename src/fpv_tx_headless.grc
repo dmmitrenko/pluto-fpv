@@ -451,6 +451,43 @@ blocks:
     coordinate: [8, 800.0]
     rotation: 0
     state: enabled
+- name: pluto_watchdog
+  id: snippet
+  parameters:
+    alias: ''
+    code: |-
+      # Ends the program when the Pluto stops taking samples (it was unplugged or
+      # restarted after a power dip). Without this the flow graph waits forever;
+      # fpv_tx_run.sh starts it again once the Pluto is back.
+      import logging
+      import os
+      import threading
+      import time
+
+      def pluto_watchdog(timeout_s=5.0):
+          log = logging.getLogger("fpv_tx")
+          last = self.pluto_tx.nitems_read(0)
+          since = time.monotonic()
+          while not self.packetizer.stopped.wait(0.5):
+              now = self.pluto_tx.nitems_read(0)
+              if now != last:
+                  last, since = now, time.monotonic()
+              elif time.monotonic() - since > timeout_s:
+                  log.error("Pluto takes no samples for %.0f s, exiting", timeout_s)
+                  logging.shutdown()
+                  os._exit(3)
+
+      threading.Thread(target=pluto_watchdog, daemon=True).start()
+    comment: ''
+    priority: '1'
+    section: main_after_start
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [8, 904.0]
+    rotation: 0
+    state: enabled
 - name: packetizer
   id: epy_block
   parameters:
