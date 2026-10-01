@@ -647,162 +647,161 @@ blocks:
 - name: depacketizer
   id: epy_block
   parameters:
-    _source_code: "\"\"\"\nFPV Depacketizer (sink block).\n\nInput: the demodulated\
-      \ and FEC-decoded bit stream (one bit per byte).\nFrame layout (see the packetizer):\n\
-      \n    [ sync 32 bit | length 16 bit | length 16 bit | seq 16 bit | type 8 bit\
-      \ | payload | CRC32 ]\n\nWhat the block does:\n- frame sync: searches for the\
-      \ sync word, checks the length fields and the\n  CRC32; after the first good\
-      \ frame it expects the next frames back to back\n  and only returns to searching\
-      \ after several bad frames in a row;\n- removes whitening, checks CRC32, drops\
-      \ damaged frames;\n- sends the payload of data frames to UDP (MPEG-TS for the\
-      \ video player);\n- counts lost frames from gaps in the sequence numbers;\n\
-      - tracks sync state, received bitrate and loss ratio for the GUI;\n- writes\
-      \ sync/loss/recovery events to a log file;\n- provides counters for the periodic\
-      \ status line in the log.\n\"\"\"\n\nimport collections\nimport logging\nimport os\nimport\
-      \ socket\nimport threading\nimport time\nimport zlib\n\nimport numpy as np\n\
-      from gnuradio import gr\n\n# Log files go to logs/<yyyy-mm-dd>/ in the repository root (next to src), one\n# folder per day. video_common.py and tx_modem_loop.sh use the same place.\ndef log_path(name):\n    folder = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),\n                          \"logs\", time.strftime(\"%Y-%m-%d\"))\n    os.makedirs(folder, exist_ok=True)\n    return os.path.join(folder, name)\n\n\nTS_PACKET_LEN = 188\nSYNC_WORD = bytes([0xE1, 0x5A,\
-      \ 0xE8, 0x93])\nHEADER_LEN = 8\nFRAME_TYPE_DATA = 1\n# Bit errors tolerated\
-      \ in the 32-bit sync word while searching.\nSYNC_MAX_ERRORS = 2\n# Bad frames\
-      \ in a row before frame sync is declared lost.\nMAX_BAD_FRAMES = 4\n# No good\
-      \ frame for this long means the link is considered lost.\nSYNC_TIMEOUT_S = 0.5\n\
-      # Window for the bitrate and loss figures shown in the GUI.\nSTATS_WINDOW_S\
-      \ = 2.0\n# A jump this large in sequence numbers is a transmitter restart, not\
-      \ loss.\nMAX_PLAUSIBLE_GAP = 2000\n\n\ndef whitening_sequence(length):\n   \
-      \ \"\"\"Pseudo-random bytes from the LFSR x^7 + x^4 + 1, all-ones start.\"\"\
-      \"\n    state = 0x7F\n    out = bytearray(length)\n    for i in range(length):\n\
-      \        value = 0\n        for _ in range(8):\n            bit = ((state >>\
-      \ 6) ^ (state >> 3)) & 1\n            state = ((state << 1) | bit) & 0x7F\n\
-      \            value = (value << 1) | bit\n        out[i] = value\n    return\
-      \ np.frombuffer(bytes(out), dtype=np.uint8)\n\n\nclass blk(gr.sync_block):\n\
-      \    def __init__(self, udp_addr=\"127.0.0.1\", udp_port=5001, ts_per_frame=4,\n\
-      \                 log_file=\"rx.log\"):\n        gr.sync_block.__init__(\n \
-      \           self, name=\"FPV Depacketizer\", in_sig=[np.uint8], out_sig=None\n\
-      \        )\n        self.udp_addr = udp_addr\n        self.udp_port = int(udp_port)\n\
-      \        self.payload_len = TS_PACKET_LEN * int(ts_per_frame)\n        self.body_len\
-      \ = 3 + self.payload_len + 4\n        self.frame_bits = (HEADER_LEN + self.body_len)\
-      \ * 8\n        self.log_file = log_file\n\n        self._whitening = whitening_sequence(self.body_len)\n\
-      \        sync_bits = np.unpackbits(np.frombuffer(SYNC_WORD, dtype=np.uint8))\n\
-      \        # +1/-1 form: the correlation peak equals 32 minus twice the bit errors.\n\
-      \        self._sync_pattern = sync_bits.astype(np.float32) * 2 - 1\n       \
-      \ self._sync_threshold = 32 - 2 * SYNC_MAX_ERRORS\n\n        self._lock = threading.Lock()\n\
-      \        self._sock = None\n        self._log = logging.getLogger(\"fpv_rx\"\
-      )\n        self._bits = np.zeros(0, dtype=np.uint8)\n        self._frame_locked\
-      \ = False\n        self._bad_frames = 0\n        self._last_seq = None\n   \
-      \     self._last_good_time = None\n        self._lost_since = None\n       \
-      \ self._in_sync = False\n        # (time, frames received, frames lost, payload\
-      \ bytes delivered)\n        self._history = collections.deque()\n        self._total_received\
-      \ = 0\n        self._total_lost = 0\n        self._total_crc_errors = 0\n  \
-      \      self._sync_losses = 0\n        self._sync_hits = 0\n        self._last_recovery_s\
-      \ = 0.0\n        # Set while the flow graph is not running; ends the status\
-      \ thread.\n        self.stopped = threading.Event()\n        self.stopped.set()\n\
-      \n    # The socket and the log are opened in start(), not in __init__, because\n\
-      \    # GNU Radio Companion creates the block once just to inspect its ports.\n\
-      \    def start(self):\n        self._log.setLevel(logging.INFO)\n        if\
-      \ self.log_file and not self._log.handlers:\n            handler = logging.FileHandler(log_path(self.log_file))\n\
-      \            handler.setFormatter(logging.Formatter(\"%(asctime)s %(levelname)s\
-      \ %(message)s\"))\n            self._log.addHandler(handler)\n        self._sock\
-      \ = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)\n        self._log.info(\n\
-      \            \"start: udp=%s:%d frame_bytes=%d\",\n            self.udp_addr,\
-      \ self.udp_port, self.frame_bits // 8,\n        )\n        self.stopped.clear()\n\
-      \        return True\n\n    def stop(self):\n        self.stopped.set()\n  \
-      \      if self._sock is not None:\n            self._sock.close()\n        \
-      \    self._sock = None\n        self._log.info(\n            \"stop: received=%d\
-      \ lost=%d crc_errors=%d sync_losses=%d\",\n            self._total_received,\
-      \ self._total_lost, self._total_crc_errors,\n            self._sync_losses,\n\
-      \        )\n        for handler in list(self._log.handlers):\n            handler.close()\n\
-      \            self._log.removeHandler(handler)\n        return True\n\n    #\
-      \ ---- values for the GUI (polled by Function Probe blocks) ----\n\n    def\
-      \ get_sync(self):\n        with self._lock:\n            self._update_sync(time.monotonic())\n\
-      \            return self._in_sync\n\n    def get_sync_text(self):\n        return\
-      \ \"LOCKED\" if self.get_sync() else \"NO SYNC\"\n\n    def get_bitrate_kbps(self):\n\
-      \        with self._lock:\n            self._trim_history(time.monotonic())\n\
-      \            payload_bytes = sum(item[3] for item in self._history)\n      \
-      \      return payload_bytes * 8 / STATS_WINDOW_S / 1000.0\n\n    def get_loss_percent(self):\n\
-      \        with self._lock:\n            self._trim_history(time.monotonic())\n\
-      \            received = sum(item[1] for item in self._history)\n           \
-      \ lost = sum(item[2] for item in self._history)\n            if received + lost\
-      \ == 0:\n                return 0.0\n            return 100.0 * lost / (received\
-      \ + lost)\n\n    def get_bitrate_text(self):\n        return \"%.0f kbit/s\"\
-      \ % self.get_bitrate_kbps()\n\n    def get_loss_text(self):\n        return\
-      \ \"%.1f %% (total lost: %d)\" % (self.get_loss_percent(), self._total_lost)\n\
-      \n    def get_total_received(self):\n        return self._total_received\n\n\
-      \    def get_total_lost(self):\n        return self._total_lost\n\n    def get_total_crc_errors(self):\n\
-      \        return self._total_crc_errors\n\n    def get_sync_losses(self):\n \
-      \       return self._sync_losses\n\n    def get_last_recovery_ms(self):\n  \
-      \      return self._last_recovery_s * 1000.0\n\n    def get_totals(self):\n\
-      \        \"\"\"Counters since the start, for the status line in the log.\"\"\
-      \"\n        with self._lock:\n            return dict(\n                received=self._total_received,\n\
-      \                lost=self._total_lost,\n                crc_errors=self._total_crc_errors,\n\
-      \                sync_hits=self._sync_hits,\n            )\n\n    # ---- statistics\
-      \ and link state ----\n\n    def _trim_history(self, now):\n        while self._history\
-      \ and now - self._history[0][0] > STATS_WINDOW_S:\n            self._history.popleft()\n\
-      \n    def _update_sync(self, now):\n        alive = (\n            self._last_good_time\
-      \ is not None\n            and now - self._last_good_time < SYNC_TIMEOUT_S\n\
-      \        )\n        if alive and not self._in_sync:\n            self._in_sync\
-      \ = True\n            if self._lost_since is None:\n                self._log.info(\"\
-      sync acquired\")\n            else:\n                self._last_recovery_s =\
-      \ now - self._lost_since\n                self._log.info(\n                \
-      \    \"sync recovered after %.0f ms without frames\",\n                    self._last_recovery_s\
-      \ * 1000.0,\n                )\n        elif not alive and self._in_sync:\n\
-      \            self._in_sync = False\n            self._sync_losses += 1\n   \
-      \         self._lost_since = self._last_good_time\n            self._log.warning(\"\
-      sync lost\")\n\n    def _handle_frame(self, body, now):\n        seq = (body[0]\
-      \ << 8) | body[1]\n        frame_type = body[2]\n\n        lost = 0\n      \
-      \  if self._last_seq is not None:\n            gap = (seq - self._last_seq -\
-      \ 1) & 0xFFFF\n            if gap > MAX_PLAUSIBLE_GAP:\n                self._log.info(\"\
-      sequence jump %d -> %d, transmitter restarted\", self._last_seq, seq)\n    \
-      \        elif gap > 0:\n                lost = gap\n                self._log.warning(\"\
-      lost %d frame(s) before seq %d\", gap, seq)\n        self._last_seq = seq\n\n\
-      \        delivered = 0\n        if frame_type == FRAME_TYPE_DATA:\n        \
-      \    payload = body[3:3 + self.payload_len]\n            try:\n            \
-      \    self._sock.sendto(payload, (self.udp_addr, self.udp_port))\n          \
-      \      delivered = len(payload)\n            except OSError as error:\n    \
-      \            self._log.error(\"udp send failed: %s\", error)\n\n        self._total_received\
-      \ += 1\n        self._total_lost += lost\n        self._last_good_time = now\n\
-      \        self._history.append((now, 1, lost, delivered))\n        self._update_sync(now)\n\
-      \n    # ---- frame sync ----\n\n    def _decode(self, frame_bits, strict_header):\n\
-      \        \"\"\"Returns the frame body if the frame is valid, otherwise None.\"\
-      \"\"\n        data = np.packbits(frame_bits)\n        if strict_header:\n  \
-      \          # While searching, a candidate must carry the right length in at\n\
-      \            # least one of the two copies; this rejects most false sync hits.\n\
-      \            first = (int(data[4]) << 8) | int(data[5])\n            second\
-      \ = (int(data[6]) << 8) | int(data[7])\n            if first != self.body_len\
-      \ and second != self.body_len:\n                return None\n        body =\
-      \ (data[HEADER_LEN:] ^ self._whitening).tobytes()\n        if zlib.crc32(body[:-4]).to_bytes(4,\
-      \ \"big\") != body[-4:]:\n            return None\n        return body\n\n \
-      \   def _search(self, now):\n        \"\"\"Looks for a valid frame anywhere\
-      \ in the buffer. True if one was found.\"\"\"\n        last_start = len(self._bits)\
-      \ - self.frame_bits\n        if last_start < 0:\n            return False\n\
-      \        window = self._bits[:last_start + 32].astype(np.float32) * 2 - 1\n\
-      \        score = np.correlate(window, self._sync_pattern, mode=\"valid\")\n\
-      \        for start in np.flatnonzero(score >= self._sync_threshold):\n     \
-      \       # Counted even if the frame turns out damaged: many hits without\n \
-      \           # good frames mean the signal is demodulated but too noisy.\n  \
-      \          self._sync_hits += 1\n            body = self._decode(self._bits[start:start\
-      \ + self.frame_bits], True)\n            if body is not None:\n            \
-      \    self._bits = self._bits[start + self.frame_bits:]\n                self._frame_locked\
-      \ = True\n                self._bad_frames = 0\n                self._log.info(\"\
-      frame sync found\")\n                self._handle_frame(body, now)\n       \
-      \         return True\n        # Nothing valid: keep only the tail that could\
-      \ not be checked yet.\n        self._bits = self._bits[last_start + 1:]\n  \
-      \      return False\n\n    def _track(self, now):\n        \"\"\"Takes the next\
-      \ frame at the expected position. False if more bits are needed.\"\"\"\n   \
-      \     if len(self._bits) < self.frame_bits:\n            return False\n    \
-      \    body = self._decode(self._bits[:self.frame_bits], False)\n        if body\
-      \ is not None:\n            self._bits = self._bits[self.frame_bits:]\n    \
-      \        self._bad_frames = 0\n            self._handle_frame(body, now)\n \
-      \           return True\n        self._total_crc_errors += 1\n        self._bad_frames\
-      \ += 1\n        if self._bad_frames >= MAX_BAD_FRAMES:\n            # The bit\
-      \ position may have slipped; search again from here.\n            self._frame_locked\
-      \ = False\n            self._log.warning(\"frame sync lost after %d bad frames\"\
-      , self._bad_frames)\n        else:\n            self._bits = self._bits[self.frame_bits:]\n\
-      \        return True\n\n    def work(self, input_items, output_items):\n   \
-      \     data = input_items[0]\n        now = time.monotonic()\n        with self._lock:\n\
-      \            self._bits = np.concatenate((self._bits, data & 1))\n         \
-      \   while True:\n                if self._frame_locked:\n                  \
-      \  if not self._track(now):\n                        break\n               \
-      \ elif not self._search(now):\n                    break\n            self._update_sync(now)\n\
-      \        return len(data)\n"
+    _source_code: "\"\"\"\nFPV Depacketizer (sink block).\n\nInput: the demodulated and FEC-decoded bit\
+      \ stream (one bit per byte).\nFrame layout (see the packetizer):\n\n    [ sync 32 bit | length\
+      \ 16 bit | length 16 bit | seq 16 bit | type 8 bit | IV 128 bit | AES-CTR(payload + CRC32) | CRC32\
+      \ ]\n\nWhat the block does:\n- frame sync: searches for the sync word, checks the length fields\
+      \ and the\n  CRC32; after the first good frame it expects the next frames back to back\n  and only\
+      \ returns to searching after several bad frames in a row;\n- removes whitening, checks CRC32, drops\
+      \ damaged frames;\n- sends the payload of data frames to UDP (MPEG-TS for the video player);\n\
+      - counts lost frames from gaps in the sequence numbers;\n- tracks sync state, received bitrate\
+      \ and loss ratio for the GUI;\n- writes sync/loss/recovery events to a log file;\n- provides counters\
+      \ for the periodic status line in the log.\n\"\"\"\n\nimport collections\nimport logging\nimport\
+      \ os\nimport socket\nimport threading\nimport time\nimport zlib\n\nimport numpy as np\nfrom gnuradio\
+      \ import gr\n# BEGIN embedded modem_crypto.py\n\"\"\"AES-128-CTR adapted from the supplied OFDM\
+      \ TX/RX embedded blocks.\n\nRuns inside GNU Radio packetizer/depacketizer, not in the video applications.\n\
+      CRC detects accidental damage/wrong keys; CTR is NOT authenticated encryption.\nNo replay protection.\
+      \ Both endpoints must use the same embedded key.\n\"\"\"\nimport os\nimport zlib\nfrom Crypto.Cipher\
+      \ import AES\n\n# Shared secret: keep this module private. Change on both endpoints together.\n\
+      KEY = bytes.fromhex(\"14ddcf63d5b3cc389d4017aee0e9c562\")\nCRYPTO_OVERHEAD = 16 + 4  # transmitted\
+      \ counter block + encrypted payload CRC32\nFRAME_OVERHEAD = 15 + CRYPTO_OVERHEAD\n\n\nclass FrameCipher:\n\
+      \    def __init__(self, key=KEY):\n        if len(key) != 16:\n            raise ValueError(\"\
+      AES-128 requires exactly 16 key bytes\")\n        self.key = key\n        self.nonce = os.urandom(12)\n\
+      \        self.counter = 0\n\n    def encrypt(self, payload):\n        plain = payload + zlib.crc32(payload).to_bytes(4,\
+      \ \"big\")\n        blocks = (len(plain) + 15) // 16\n        if self.counter + blocks > 2**32:\n\
+      \            raise OverflowError(\"AES counter exhausted; restart TX for a fresh nonce\")\n   \
+      \     iv = self.nonce + self.counter.to_bytes(4, \"big\")\n        cipher = AES.new(self.key, AES.MODE_CTR,\
+      \ nonce=self.nonce,\n                         initial_value=self.counter)\n        self.counter\
+      \ += blocks  # no overlapping counter ranges between frames\n        return iv + cipher.encrypt(plain)\n\
+      \n    def decrypt(self, record):\n        if len(record) < CRYPTO_OVERHEAD:\n            raise\
+      \ ValueError(\"Truncated AES frame\")\n        iv = record[:16]\n        cipher = AES.new(self.key,\
+      \ AES.MODE_CTR, nonce=iv[:12],\n                         initial_value=int.from_bytes(iv[12:],\
+      \ \"big\"))\n        plain = cipher.decrypt(record[16:])\n        if zlib.crc32(plain[:-4]).to_bytes(4,\
+      \ \"big\") != plain[-4:]:\n            raise ValueError(\"AES plaintext CRC mismatch (wrong key\
+      \ or damaged frame)\")\n        return plain[:-4]\n\n# END embedded modem_crypto.py\n\n# Log files\
+      \ go to logs/<yyyy-mm-dd>/ in the repository root (next to src), one\n# folder per day. video_common.py\
+      \ and tx_modem_loop.sh use the same place.\ndef log_path(name):\n    folder = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),\n\
+      \                          \"logs\", time.strftime(\"%Y-%m-%d\"))\n    os.makedirs(folder, exist_ok=True)\n\
+      \    return os.path.join(folder, name)\n\n\nTS_PACKET_LEN = 188\nSYNC_WORD = bytes([0xE1, 0x5A,\
+      \ 0xE8, 0x93])\nHEADER_LEN = 8\nFRAME_TYPE_DATA = 1\n# Bit errors tolerated in the 32-bit sync\
+      \ word while searching.\nSYNC_MAX_ERRORS = 2\n# Bad frames in a row before frame sync is declared\
+      \ lost.\nMAX_BAD_FRAMES = 4\n# No good frame for this long means the link is considered lost.\n\
+      SYNC_TIMEOUT_S = 0.5\n# Window for the bitrate and loss figures shown in the GUI.\nSTATS_WINDOW_S\
+      \ = 2.0\n# A jump this large in sequence numbers is a transmitter restart, not loss.\nMAX_PLAUSIBLE_GAP\
+      \ = 2000\n\n\ndef whitening_sequence(length):\n    \"\"\"Pseudo-random bytes from the LFSR x^7\
+      \ + x^4 + 1, all-ones start.\"\"\"\n    state = 0x7F\n    out = bytearray(length)\n    for i in\
+      \ range(length):\n        value = 0\n        for _ in range(8):\n            bit = ((state >> 6)\
+      \ ^ (state >> 3)) & 1\n            state = ((state << 1) | bit) & 0x7F\n            value = (value\
+      \ << 1) | bit\n        out[i] = value\n    return np.frombuffer(bytes(out), dtype=np.uint8)\n\n\
+      \nclass blk(gr.sync_block):\n    def __init__(self, udp_addr=\"127.0.0.1\", udp_port=5001, ts_per_frame=4,\n\
+      \                 log_file=\"rx.log\"):\n        gr.sync_block.__init__(\n            self, name=\"\
+      FPV Depacketizer + AES-128 RX\", in_sig=[np.uint8], out_sig=None\n        )\n        self.udp_addr\
+      \ = udp_addr\n        self.udp_port = int(udp_port)\n        self.payload_len = TS_PACKET_LEN *\
+      \ int(ts_per_frame)\n        self.body_len = 3 + self.payload_len + CRYPTO_OVERHEAD + 4\n     \
+      \   self._cipher = FrameCipher()\n        self.frame_bits = (HEADER_LEN + self.body_len) * 8\n\
+      \        self.log_file = log_file\n\n        self._whitening = whitening_sequence(self.body_len)\n\
+      \        sync_bits = np.unpackbits(np.frombuffer(SYNC_WORD, dtype=np.uint8))\n        # +1/-1 form:\
+      \ the correlation peak equals 32 minus twice the bit errors.\n        self._sync_pattern = sync_bits.astype(np.float32)\
+      \ * 2 - 1\n        self._sync_threshold = 32 - 2 * SYNC_MAX_ERRORS\n\n        self._lock = threading.Lock()\n\
+      \        self._sock = None\n        self._log = logging.getLogger(\"fpv_rx\")\n        self._bits\
+      \ = np.zeros(0, dtype=np.uint8)\n        self._frame_locked = False\n        self._bad_frames =\
+      \ 0\n        self._last_seq = None\n        self._last_good_time = None\n        self._lost_since\
+      \ = None\n        self._in_sync = False\n        # (time, frames received, frames lost, payload\
+      \ bytes delivered)\n        self._history = collections.deque()\n        self._total_received =\
+      \ 0\n        self._total_lost = 0\n        self._total_crc_errors = 0\n        self._crypto_errors\
+      \ = 0\n        self._sync_losses = 0\n        self._sync_hits = 0\n        self._last_recovery_s\
+      \ = 0.0\n        # Set while the flow graph is not running; ends the status thread.\n        self.stopped\
+      \ = threading.Event()\n        self.stopped.set()\n\n    # The socket and the log are opened in\
+      \ start(), not in __init__, because\n    # GNU Radio Companion creates the block once just to inspect\
+      \ its ports.\n    def start(self):\n        self._log.setLevel(logging.INFO)\n        if self.log_file\
+      \ and not self._log.handlers:\n            handler = logging.FileHandler(log_path(self.log_file))\n\
+      \            handler.setFormatter(logging.Formatter(\"%(asctime)s %(levelname)s %(message)s\"))\n\
+      \            self._log.addHandler(handler)\n        self._sock = socket.socket(socket.AF_INET,\
+      \ socket.SOCK_DGRAM)\n        self._log.info(\n            \"start: udp=%s:%d frame_bytes=%d\"\
+      ,\n            self.udp_addr, self.udp_port, self.frame_bits // 8,\n        )\n        self._log.info(\"\
+      AES-128-CTR enabled in modem; crypto overhead %d bytes/frame\", CRYPTO_OVERHEAD)\n        self.stopped.clear()\n\
+      \        return True\n\n    def stop(self):\n        self.stopped.set()\n        if self._sock\
+      \ is not None:\n            self._sock.close()\n            self._sock = None\n        self._log.info(\n\
+      \            \"stop: received=%d lost=%d crc_errors=%d sync_losses=%d\",\n            self._total_received,\
+      \ self._total_lost, self._total_crc_errors,\n            self._sync_losses,\n        )\n      \
+      \  for handler in list(self._log.handlers):\n            handler.close()\n            self._log.removeHandler(handler)\n\
+      \        return True\n\n    # ---- values for the GUI (polled by Function Probe blocks) ----\n\n\
+      \    def get_sync(self):\n        with self._lock:\n            self._update_sync(time.monotonic())\n\
+      \            return self._in_sync\n\n    def get_sync_text(self):\n        return \"LOCKED\" if\
+      \ self.get_sync() else \"NO SYNC\"\n\n    def get_bitrate_kbps(self):\n        with self._lock:\n\
+      \            self._trim_history(time.monotonic())\n            payload_bytes = sum(item[3] for\
+      \ item in self._history)\n            return payload_bytes * 8 / STATS_WINDOW_S / 1000.0\n\n  \
+      \  def get_loss_percent(self):\n        with self._lock:\n            self._trim_history(time.monotonic())\n\
+      \            received = sum(item[1] for item in self._history)\n            lost = sum(item[2]\
+      \ for item in self._history)\n            if received + lost == 0:\n                return 0.0\n\
+      \            return 100.0 * lost / (received + lost)\n\n    def get_bitrate_text(self):\n     \
+      \   return \"%.0f kbit/s\" % self.get_bitrate_kbps()\n\n    def get_loss_text(self):\n        return\
+      \ \"%.1f %% (total lost: %d)\" % (self.get_loss_percent(), self._total_lost)\n\n    def get_total_received(self):\n\
+      \        return self._total_received\n\n    def get_total_lost(self):\n        return self._total_lost\n\
+      \n    def get_total_crc_errors(self):\n        return self._total_crc_errors\n\n    def get_sync_losses(self):\n\
+      \        return self._sync_losses\n\n    def get_last_recovery_ms(self):\n        return self._last_recovery_s\
+      \ * 1000.0\n\n    def get_totals(self):\n        \"\"\"Counters since the start, for the status\
+      \ line in the log.\"\"\"\n        with self._lock:\n            return dict(\n                received=self._total_received,\n\
+      \                lost=self._total_lost,\n                crc_errors=self._total_crc_errors,\n \
+      \               sync_hits=self._sync_hits,\n            )\n\n    # ---- statistics and link state\
+      \ ----\n\n    def _trim_history(self, now):\n        while self._history and now - self._history[0][0]\
+      \ > STATS_WINDOW_S:\n            self._history.popleft()\n\n    def _update_sync(self, now):\n\
+      \        alive = (\n            self._last_good_time is not None\n            and now - self._last_good_time\
+      \ < SYNC_TIMEOUT_S\n        )\n        if alive and not self._in_sync:\n            self._in_sync\
+      \ = True\n            if self._lost_since is None:\n                self._log.info(\"sync acquired\"\
+      )\n            else:\n                self._last_recovery_s = now - self._lost_since\n        \
+      \        self._log.info(\n                    \"sync recovered after %.0f ms without frames\",\n\
+      \                    self._last_recovery_s * 1000.0,\n                )\n        elif not alive\
+      \ and self._in_sync:\n            self._in_sync = False\n            self._sync_losses += 1\n \
+      \           self._lost_since = self._last_good_time\n            self._log.warning(\"sync lost\"\
+      )\n\n    def _handle_frame(self, body, now):\n        seq = (body[0] << 8) | body[1]\n        frame_type\
+      \ = body[2]\n\n        lost = 0\n        if self._last_seq is not None:\n            gap = (seq\
+      \ - self._last_seq - 1) & 0xFFFF\n            if gap > MAX_PLAUSIBLE_GAP:\n                self._log.info(\"\
+      sequence jump %d -> %d, transmitter restarted\", self._last_seq, seq)\n            elif gap > 0:\n\
+      \                lost = gap\n                self._log.warning(\"lost %d frame(s) before seq %d\"\
+      , gap, seq)\n        self._last_seq = seq\n\n        delivered = 0\n        if frame_type == FRAME_TYPE_DATA:\n\
+      \            payload = body[3:3 + self.payload_len]\n            try:\n                self._sock.sendto(payload,\
+      \ (self.udp_addr, self.udp_port))\n                delivered = len(payload)\n            except\
+      \ OSError as error:\n                self._log.error(\"udp send failed: %s\", error)\n\n      \
+      \  self._total_received += 1\n        self._total_lost += lost\n        self._last_good_time =\
+      \ now\n        self._history.append((now, 1, lost, delivered))\n        self._update_sync(now)\n\
+      \n    # ---- frame sync ----\n\n    def _decode(self, frame_bits, strict_header):\n        \"\"\
+      \"Returns the frame body if the frame is valid, otherwise None.\"\"\"\n        data = np.packbits(frame_bits)\n\
+      \        if strict_header:\n            # While searching, a candidate must carry the right length\
+      \ in at\n            # least one of the two copies; this rejects most false sync hits.\n      \
+      \      first = (int(data[4]) << 8) | int(data[5])\n            second = (int(data[6]) << 8) | int(data[7])\n\
+      \            if first != self.body_len and second != self.body_len:\n                return None\n\
+      \        body = (data[HEADER_LEN:] ^ self._whitening).tobytes()\n        if zlib.crc32(body[:-4]).to_bytes(4,\
+      \ \"big\") != body[-4:]:\n            return None\n        try:\n            payload = self._cipher.decrypt(body[3:-4])\n\
+      \        except (ValueError, OverflowError):\n            self._crypto_errors += 1\n          \
+      \  if self._crypto_errors == 1 or self._crypto_errors % 1000 == 0:\n                self._log.warning(\"\
+      AES decrypt/CRC failures: %d; check shared modem key\", self._crypto_errors)\n            return\
+      \ None\n        return body[:3] + payload + body[-4:]\n\n    def _search(self, now):\n        \"\
+      \"\"Looks for a valid frame anywhere in the buffer. True if one was found.\"\"\"\n        last_start\
+      \ = len(self._bits) - self.frame_bits\n        if last_start < 0:\n            return False\n \
+      \       window = self._bits[:last_start + 32].astype(np.float32) * 2 - 1\n        score = np.correlate(window,\
+      \ self._sync_pattern, mode=\"valid\")\n        for start in np.flatnonzero(score >= self._sync_threshold):\n\
+      \            # Counted even if the frame turns out damaged: many hits without\n            # good\
+      \ frames mean the signal is demodulated but too noisy.\n            self._sync_hits += 1\n    \
+      \        body = self._decode(self._bits[start:start + self.frame_bits], True)\n            if body\
+      \ is not None:\n                self._bits = self._bits[start + self.frame_bits:]\n           \
+      \     self._frame_locked = True\n                self._bad_frames = 0\n                self._log.info(\"\
+      frame sync found\")\n                self._handle_frame(body, now)\n                return True\n\
+      \        # Nothing valid: keep only the tail that could not be checked yet.\n        self._bits\
+      \ = self._bits[last_start + 1:]\n        return False\n\n    def _track(self, now):\n        \"\
+      \"\"Takes the next frame at the expected position. False if more bits are needed.\"\"\"\n     \
+      \   if len(self._bits) < self.frame_bits:\n            return False\n        body = self._decode(self._bits[:self.frame_bits],\
+      \ False)\n        if body is not None:\n            self._bits = self._bits[self.frame_bits:]\n\
+      \            self._bad_frames = 0\n            self._handle_frame(body, now)\n            return\
+      \ True\n        self._total_crc_errors += 1\n        self._bad_frames += 1\n        if self._bad_frames\
+      \ >= MAX_BAD_FRAMES:\n            # The bit position may have slipped; search again from here.\n\
+      \            self._frame_locked = False\n            self._log.warning(\"frame sync lost after\
+      \ %d bad frames\", self._bad_frames)\n        else:\n            self._bits = self._bits[self.frame_bits:]\n\
+      \        return True\n\n    def work(self, input_items, output_items):\n        data = input_items[0]\n\
+      \        now = time.monotonic()\n        with self._lock:\n            self._bits = np.concatenate((self._bits,\
+      \ data & 1))\n            while True:\n                if self._frame_locked:\n               \
+      \     if not self._track(now):\n                        break\n                elif not self._search(now):\n\
+      \                    break\n            self._update_sync(now)\n        return len(data)\n"
     affinity: ''
     alias: ''
     comment: ''
@@ -813,7 +812,7 @@ blocks:
     udp_addr: udp_out_addr
     udp_port: udp_out_port
   states:
-    _io_cache: ('FPV Depacketizer', 'blk', [('udp_addr', "'127.0.0.1'"), ('udp_port',
+    _io_cache: ('FPV Depacketizer + AES-128 RX', 'blk', [('udp_addr', "'127.0.0.1'"), ('udp_port',
       '5001'), ('ts_per_frame', '4'), ('log_file', "'rx.log'")], [('0', 'byte', 1)],
       [], '', ['log_file', 'udp_addr', 'udp_port'])
     bus_sink: false

@@ -1,7 +1,7 @@
 """Video side of the RECEIVER: fpv_rx -> UDP -> counters -> ffplay window.
 
 Listens on udp_out_port ([main] of rx.ini), where fpv_rx.grc delivers the
-encrypted TS envelopes, authenticates and decrypts them before ffplay, and counts:
+MPEG-TS stream already decrypted by the modem, forwards it to ffplay, and counts:
 
     frame rate      starts of video frames in the stream
     bit rate        without the padding packets added by the modem
@@ -22,13 +22,10 @@ import threading
 import time
 
 import video_common
-from video_crypto import Decoder, load_key
 
-# Shared secret: anyone with this source file can extract the key.
-EMBEDDED_AES_KEY = bytes.fromhex("075361aa0d6e6db640b40efd064a467c7921072d721d21ae4399216b9115c92c")
 
 VIDEO_DEFAULTS = dict(player_port="5002", stall_ms="200", window_title="FPV RX",
-                      log_file="video_rx.log", ffmpeg_dir="")
+                      log_file="video_rx.log", ffmpeg_dir="", low_latency="1")
 MAIN_DEFAULTS = dict(udp_out_port="5001")
 
 TS_LEN = 188
@@ -131,6 +128,9 @@ def start_player(ffplay, video):
                "-probesize", "32768", "-analyzeduration", "0",
                "-framedrop", "-sync", "ext",
                "-window_title", video["window_title"], url]
+    if int(video.get("low_latency", "1")):
+        # Avoid frame-threaded decoder delay; keep UDP capacity for short bursts.
+        command[-1:-1] = ["-threads", "1", "-filter_threads", "1", "-noinfbuf"]
     return command, subprocess.Popen(command, stdin=subprocess.DEVNULL,
                                      stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
 
@@ -140,9 +140,7 @@ def main():
     parser.add_argument("--port", type=int, help="UDP port; overrides udp_out_port")
     parser.add_argument("--no-player", action="store_true", help="counters only")
     parser.add_argument("--seconds", type=float, default=0, help="stop after this time")
-    parser.add_argument("--key-file", help="override the embedded key with a 32-byte binary key file")
     args = parser.parse_args()
-    decryptor = Decoder(load_key(args.key_file) if args.key_file else EMBEDDED_AES_KEY)
 
     main_cfg, video = video_common.read_config("rx.ini", VIDEO_DEFAULTS, MAIN_DEFAULTS)
     port = args.port or int(main_cfg["udp_out_port"])
@@ -179,8 +177,6 @@ def main():
                 data = b""
             now = time.monotonic()
             if data:
-                data = decryptor.feed(data)
-            if data:
                 try:
                     forward.sendto(data, player_address)
                 except OSError:
@@ -206,7 +202,6 @@ def main():
                 console.stream.flush()
             if now >= next_log + LOG_PERIOD:
                 next_log += LOG_PERIOD
-                log.info("AES-GCM rejected records: %d", decryptor.rejected)
                 log.info(
                     "fps %.1f, bitrate %.0f kbit/s, lost packets %d, total lost %d, "
                     "stalls %d, decode errors %d",
@@ -241,7 +236,6 @@ def main():
         counters.stalled_time += duration
     video_time = (now - counters.first_frame_time) if counters.first_frame_time else 0.0
     packets = counters.payload_bytes // TS_LEN
-    log.info("AES-GCM rejected records: %d", decryptor.rejected)
     log.info("stop. Totals:")
     log.info("  run time:          %.0f s, video for %.0f s", now - started, video_time)
     log.info("  frames:            %d, average %.1f fps, lowest second %s fps",

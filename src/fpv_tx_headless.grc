@@ -272,7 +272,7 @@ blocks:
   id: variable
   parameters:
     comment: ''
-    value: (188*ts_per_frame + 15) * 8 * (2 if fec_enabled else 1) / 2.0 * sps
+    value: (188*ts_per_frame + 35) * 8 * (2 if fec_enabled else 1) / 2.0 * sps
   states:
     bus_sink: false
     bus_source: false
@@ -491,138 +491,142 @@ blocks:
 - name: packetizer
   id: epy_block
   parameters:
-    _source_code: "\"\"\"\nFPV Packetizer (source block).\n\nReads MPEG-TS bytes from\
-      \ a UDP port and produces a continuous stream of\nlink frames:\n\n    [ sync\
-      \ 32 bit | length 16 bit | length 16 bit | seq 16 bit | type 8 bit | payload\
-      \ | CRC32 ]\n                                                  |<------------\
-      \ whitened ------------>|\n\n- sync:    fixed word, marks the start of a frame;\n\
-      - length:  number of bytes after the header, sent twice (the receiver uses it\n\
-      \           to reject false sync hits);\n- seq:     frame counter, lets the\
-      \ receiver count lost frames;\n- type:    1 = video data, 0 = idle frame;\n\
-      - payload: ts_per_frame MPEG-TS packets (188 bytes each);\n- CRC32:   over seq,\
-      \ type and payload.\n\nIdle frames are sent when there is no video data, so\
-      \ the RF signal stays\ncontinuous and the receiver loops stay locked.\n\nLatency\
-      \ control: GNU Radio buffers would happily store seconds of frames\nbetween\
-      \ this block and the radio. To avoid that, the block is told how many\nsamples\
-      \ the radio has already taken (consumed_samples, updated by a Function\nProbe)\
-      \ and only produces a new frame while less than max_latency_ms of\nsignal is\
-      \ waiting in the transmit chain.\n\"\"\"\n\nimport logging\nimport os\nimport socket\n\
-      import threading\nimport time\nimport zlib\n\nimport numpy as np\nfrom gnuradio\
-      \ import gr\n\n# Log files go to logs/<yyyy-mm-dd>/ in the repository root (next to src), one\n# folder per day. video_common.py and tx_modem_loop.sh use the same place.\ndef log_path(name):\n    folder = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),\n                          \"logs\", time.strftime(\"%Y-%m-%d\"))\n    os.makedirs(folder, exist_ok=True)\n    return os.path.join(folder, name)\n\n\nTS_PACKET_LEN = 188\nSYNC_WORD = bytes([0xE1, 0x5A, 0xE8, 0x93])\n\
-      FRAME_TYPE_IDLE = 0\nFRAME_TYPE_DATA = 1\n# MPEG-TS null packet (PID 0x1FFF);\
-      \ players ignore it.\nTS_NULL_PACKET = bytes([0x47, 0x1F, 0xFF, 0x10]) + bytes([0xFF])\
-      \ * 184\n# Queue limit in frames. At ~1 Mbit/s 64 frames is about 0.4 s of video.\n\
-      MAX_QUEUE_FRAMES = 64\n# Data that does not fill a whole frame is padded and\
-      \ sent after this time.\nMAX_PARTIAL_WAIT_S = 0.02\n# How long the consumed_samples\
-      \ value may be extrapolated without an update.\nMAX_EXTRAPOLATION_S = 0.1\n\
-      # Longest time work() waits for the radio before producing a frame anyway.\n\
-      MAX_WAIT_S = 0.2\n\n\ndef whitening_sequence(length):\n    \"\"\"Pseudo-random\
-      \ bytes from the LFSR x^7 + x^4 + 1, all-ones start.\"\"\"\n    state = 0x7F\n\
-      \    out = bytearray(length)\n    for i in range(length):\n        value = 0\n\
-      \        for _ in range(8):\n            bit = ((state >> 6) ^ (state >> 3))\
-      \ & 1\n            state = ((state << 1) | bit) & 0x7F\n            value =\
-      \ (value << 1) | bit\n        out[i] = value\n    return np.frombuffer(bytes(out),\
-      \ dtype=np.uint8)\n\n\nclass blk(gr.sync_block):\n    def __init__(self, udp_port=5000,\
-      \ ts_per_frame=4, log_file=\"tx.log\",\n                 samples_per_frame=0.0,\
-      \ samp_rate=2000000, max_latency_ms=40.0,\n                 consumed_samples=0):\n\
-      \        gr.sync_block.__init__(\n            self, name=\"FPV Packetizer\"\
-      , in_sig=None, out_sig=[np.uint8]\n        )\n        self.udp_port = int(udp_port)\n\
-      \        self.payload_len = TS_PACKET_LEN * int(ts_per_frame)\n        self.body_len\
-      \ = 3 + self.payload_len + 4\n        self.log_file = log_file\n        # samples_per_frame\
-      \ = 0 switches the latency control off.\n        self.samples_per_frame = float(samples_per_frame)\n\
-      \        self.samp_rate = float(samp_rate)\n        self.max_latency_ms = float(max_latency_ms)\n\
-      \n        length = bytes([self.body_len >> 8, self.body_len & 0xFF])\n     \
-      \   self._header = SYNC_WORD + length + length\n        self._whitening = whitening_sequence(self.body_len)\n\
-      \        self._idle_payload = bytes(self.payload_len)\n        self._lock =\
-      \ threading.Lock()\n        self._consumed = 0\n        self._consumed_time\
-      \ = time.monotonic()\n        self._sock = None\n        self._log = logging.getLogger(\"\
-      fpv_tx\")\n        self._queue = bytearray()\n        self._queue_time = None\n\
-      \        self._pending = b\"\"\n        self._seq = 0\n        self._frames\
-      \ = 0\n        self._dropped_bytes = 0\n        self._data_frames = 0\n    \
-      \    self._idle_frames = 0\n        self._input_bytes = 0\n        # Set while\
-      \ the flow graph is not running; ends the status thread.\n        self.stopped\
-      \ = threading.Event()\n        self.stopped.set()\n\n    @property\n    def\
-      \ consumed_samples(self):\n        return self._consumed\n\n    @consumed_samples.setter\n\
-      \    def consumed_samples(self, value):\n        with self._lock:\n        \
-      \    if value != self._consumed:\n                self._consumed = value\n \
-      \               self._consumed_time = time.monotonic()\n\n    # The socket and\
-      \ the log are opened in start(), not in __init__, because\n    # GNU Radio Companion\
-      \ creates the block once just to inspect its ports.\n    def start(self):\n\
-      \        self._log.setLevel(logging.INFO)\n        if self.log_file and not\
-      \ self._log.handlers:\n            handler = logging.FileHandler(log_path(self.log_file))\n\
-      \            handler.setFormatter(logging.Formatter(\"%(asctime)s %(levelname)s\
-      \ %(message)s\"))\n            self._log.addHandler(handler)\n\n        self._sock\
-      \ = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)\n        self._sock.setsockopt(socket.SOL_SOCKET,\
-      \ socket.SO_RCVBUF, 1 << 20)\n        self._sock.bind((\"0.0.0.0\", self.udp_port))\n\
-      \        self._sock.setblocking(False)\n        self._log.info(\n          \
-      \  \"start: udp_port=%d frame_bytes=%d payload_bytes=%d max_latency_ms=%.0f\"\
-      ,\n            self.udp_port, len(self._header) + self.body_len, self.payload_len,\n\
-      \            self.max_latency_ms,\n        )\n        self.stopped.clear()\n\
-      \        return True\n\n    def stop(self):\n        self.stopped.set()\n  \
-      \      if self._sock is not None:\n            self._sock.close()\n        \
-      \    self._sock = None\n        self._log.info(\n            \"stop: data_frames=%d\
-      \ idle_frames=%d dropped_bytes=%d\",\n            self._data_frames, self._idle_frames,\
-      \ self._dropped_bytes,\n        )\n        for handler in list(self._log.handlers):\n\
-      \            handler.close()\n            self._log.removeHandler(handler)\n\
-      \        return True\n\n    def get_data_frames(self):\n        return self._data_frames\n\
-      \n    def get_idle_frames(self):\n        return self._idle_frames\n\n    def\
-      \ get_dropped_bytes(self):\n        return self._dropped_bytes\n\n    def get_totals(self):\n\
-      \        \"\"\"Counters since the start, for the status line in the log.\"\"\
-      \"\n        with self._lock:\n            consumed = self._consumed\n      \
-      \  waiting = self._frames * self.samples_per_frame - consumed\n        return\
-      \ dict(\n            data_frames=self._data_frames,\n            idle_frames=self._idle_frames,\n\
-      \            input_bytes=self._input_bytes,\n            dropped_bytes=self._dropped_bytes,\n\
-      \            queue_bytes=len(self._queue),\n            waiting_ms=waiting /\
-      \ self.samp_rate * 1000.0,\n        )\n\n    def _read_socket(self):\n     \
-      \   while True:\n            try:\n                data = self._sock.recv(65536)\n\
-      \            except OSError:\n                break\n            if not self._queue:\n\
-      \                self._queue_time = time.monotonic()\n            self._queue\
-      \ += data\n            self._input_bytes += len(data)\n        # Input is faster\
-      \ than the radio link: drop the oldest TS packets,\n        # whole packets\
-      \ only, so the stream stays aligned to 188 bytes.\n        limit = self.payload_len\
-      \ * MAX_QUEUE_FRAMES\n        if len(self._queue) > limit:\n            excess\
-      \ = len(self._queue) - limit\n            excess += (-excess) % TS_PACKET_LEN\n\
-      \            del self._queue[:excess]\n            if self._dropped_bytes ==\
-      \ 0:\n                self._log.warning(\"input queue overflow, dropping oldest\
-      \ data\")\n            self._dropped_bytes += excess\n\n    def _may_start_frame(self):\n\
-      \        if self.samples_per_frame <= 0:\n            return True\n        with\
-      \ self._lock:\n            since_update = min(time.monotonic() - self._consumed_time,\
-      \ MAX_EXTRAPOLATION_S)\n            consumed = self._consumed + since_update\
-      \ * self.samp_rate\n        waiting = self._frames * self.samples_per_frame\
-      \ - consumed\n        return waiting < self.max_latency_ms * 1e-3 * self.samp_rate\n\
-      \n    def _take_payload(self):\n        \"\"\"Returns the payload of the next\
-      \ data frame, or None for an idle frame.\"\"\"\n        now = time.monotonic()\n\
-      \        if len(self._queue) >= self.payload_len:\n            payload = bytes(self._queue[:self.payload_len])\n\
-      \            del self._queue[:self.payload_len]\n            self._queue_time\
-      \ = now\n            return payload\n        whole = len(self._queue) - len(self._queue)\
-      \ % TS_PACKET_LEN\n        if whole and now - self._queue_time > MAX_PARTIAL_WAIT_S:\n\
-      \            # Do not let the last packets of a burst wait for more data.\n\
-      \            payload = bytes(self._queue[:whole])\n            del self._queue[:whole]\n\
-      \            self._queue_time = now\n            missing = (self.payload_len\
-      \ - whole) // TS_PACKET_LEN\n            return payload + TS_NULL_PACKET * missing\n\
-      \        return None\n\n    def _next_frame(self):\n        payload = self._take_payload()\n\
-      \        if payload is None:\n            frame_type = FRAME_TYPE_IDLE\n   \
-      \         payload = self._idle_payload\n            self._idle_frames += 1\n\
-      \        else:\n            frame_type = FRAME_TYPE_DATA\n            self._data_frames\
-      \ += 1\n        body = bytes([self._seq >> 8, self._seq & 0xFF, frame_type])\
-      \ + payload\n        body += zlib.crc32(body).to_bytes(4, \"big\")\n       \
-      \ self._seq = (self._seq + 1) & 0xFFFF\n        self._frames += 1\n        whitened\
-      \ = np.frombuffer(body, dtype=np.uint8) ^ self._whitening\n        return self._header\
-      \ + whitened.tobytes()\n\n    def work(self, input_items, output_items):\n \
-      \       out = output_items[0]\n        produced = 0\n        while produced\
-      \ < len(out):\n            if not self._pending:\n                if not self._may_start_frame():\n\
-      \                    if produced > 0:\n                        break\n     \
-      \               self._wait_for_room()\n                self._read_socket()\n\
-      \                self._pending = self._next_frame()\n            count = min(len(out)\
-      \ - produced, len(self._pending))\n            out[produced:produced + count]\
-      \ = np.frombuffer(\n                self._pending, dtype=np.uint8, count=count\n\
-      \            )\n            self._pending = self._pending[count:]\n        \
-      \    produced += count\n        return produced\n\n    def _wait_for_room(self):\n\
-      \        # A source block must never return zero items (GNU Radio would treat\n\
-      \        # it as finished), so wait here until the radio has taken enough\n\
-      \        # samples. The timeout keeps the flow graph responsive to stop().\n\
-      \        deadline = time.monotonic() + MAX_WAIT_S\n        while not self._may_start_frame()\
-      \ and time.monotonic() < deadline:\n            time.sleep(0.001)\n"
+    _source_code: "\"\"\"\nFPV Packetizer (source block).\n\nReads MPEG-TS bytes from a UDP port and\
+      \ produces a continuous stream of\nlink frames:\n\n    [ sync 32 bit | length 16 bit | length 16\
+      \ bit | seq 16 bit | type 8 bit | IV 128 bit | AES-CTR(payload + CRC32) | CRC32 ]\n           \
+      \                                       |<------------ whitened ------------>|\n\n- sync:    fixed\
+      \ word, marks the start of a frame;\n- length:  number of bytes after the header, sent twice (the\
+      \ receiver uses it\n           to reject false sync hits);\n- seq:     frame counter, lets the\
+      \ receiver count lost frames;\n- type:    1 = video data, 0 = idle frame;\n- payload: ts_per_frame\
+      \ MPEG-TS packets (188 bytes each);\n- CRC32:   over seq, type and payload.\n\nIdle frames are\
+      \ sent when there is no video data, so the RF signal stays\ncontinuous and the receiver loops stay\
+      \ locked.\n\nLatency control: GNU Radio buffers would happily store seconds of frames\nbetween\
+      \ this block and the radio. To avoid that, the block is told how many\nsamples the radio has already\
+      \ taken (consumed_samples, updated by a Function\nProbe) and only produces a new frame while less\
+      \ than max_latency_ms of\nsignal is waiting in the transmit chain.\n\"\"\"\n\nimport logging\n\
+      import os\nimport socket\nimport threading\nimport time\nimport zlib\n\nimport numpy as np\nfrom\
+      \ gnuradio import gr\n# BEGIN embedded modem_crypto.py\n\"\"\"AES-128-CTR adapted from the supplied\
+      \ OFDM TX/RX embedded blocks.\n\nRuns inside GNU Radio packetizer/depacketizer, not in the video\
+      \ applications.\nCRC detects accidental damage/wrong keys; CTR is NOT authenticated encryption.\n\
+      No replay protection. Both endpoints must use the same embedded key.\n\"\"\"\nimport os\nimport\
+      \ zlib\nfrom Crypto.Cipher import AES\n\n# Shared secret: keep this module private. Change on both\
+      \ endpoints together.\nKEY = bytes.fromhex(\"14ddcf63d5b3cc389d4017aee0e9c562\")\nCRYPTO_OVERHEAD\
+      \ = 16 + 4  # transmitted counter block + encrypted payload CRC32\nFRAME_OVERHEAD = 15 + CRYPTO_OVERHEAD\n\
+      \n\nclass FrameCipher:\n    def __init__(self, key=KEY):\n        if len(key) != 16:\n        \
+      \    raise ValueError(\"AES-128 requires exactly 16 key bytes\")\n        self.key = key\n    \
+      \    self.nonce = os.urandom(12)\n        self.counter = 0\n\n    def encrypt(self, payload):\n\
+      \        plain = payload + zlib.crc32(payload).to_bytes(4, \"big\")\n        blocks = (len(plain)\
+      \ + 15) // 16\n        if self.counter + blocks > 2**32:\n            raise OverflowError(\"AES\
+      \ counter exhausted; restart TX for a fresh nonce\")\n        iv = self.nonce + self.counter.to_bytes(4,\
+      \ \"big\")\n        cipher = AES.new(self.key, AES.MODE_CTR, nonce=self.nonce,\n              \
+      \           initial_value=self.counter)\n        self.counter += blocks  # no overlapping counter\
+      \ ranges between frames\n        return iv + cipher.encrypt(plain)\n\n    def decrypt(self, record):\n\
+      \        if len(record) < CRYPTO_OVERHEAD:\n            raise ValueError(\"Truncated AES frame\"\
+      )\n        iv = record[:16]\n        cipher = AES.new(self.key, AES.MODE_CTR, nonce=iv[:12],\n\
+      \                         initial_value=int.from_bytes(iv[12:], \"big\"))\n        plain = cipher.decrypt(record[16:])\n\
+      \        if zlib.crc32(plain[:-4]).to_bytes(4, \"big\") != plain[-4:]:\n            raise ValueError(\"\
+      AES plaintext CRC mismatch (wrong key or damaged frame)\")\n        return plain[:-4]\n\n# END\
+      \ embedded modem_crypto.py\n\n# Log files go to logs/<yyyy-mm-dd>/ in the repository root (next\
+      \ to src), one\n# folder per day. video_common.py and tx_modem_loop.sh use the same place.\ndef\
+      \ log_path(name):\n    folder = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),\n\
+      \                          \"logs\", time.strftime(\"%Y-%m-%d\"))\n    os.makedirs(folder, exist_ok=True)\n\
+      \    return os.path.join(folder, name)\n\n\nTS_PACKET_LEN = 188\nSYNC_WORD = bytes([0xE1, 0x5A,\
+      \ 0xE8, 0x93])\nFRAME_TYPE_IDLE = 0\nFRAME_TYPE_DATA = 1\n# MPEG-TS null packet (PID 0x1FFF); players\
+      \ ignore it.\nTS_NULL_PACKET = bytes([0x47, 0x1F, 0xFF, 0x10]) + bytes([0xFF]) * 184\n# Queue limit\
+      \ in frames. At ~1 Mbit/s 64 frames is about 0.4 s of video.\nMAX_QUEUE_FRAMES = 64\n# Data that\
+      \ does not fill a whole frame is padded and sent after this time.\nMAX_PARTIAL_WAIT_S = 0.02\n\
+      # How long the consumed_samples value may be extrapolated without an update.\nMAX_EXTRAPOLATION_S\
+      \ = 0.1\n# Longest time work() waits for the radio before producing a frame anyway.\nMAX_WAIT_S\
+      \ = 0.2\n\n\ndef whitening_sequence(length):\n    \"\"\"Pseudo-random bytes from the LFSR x^7 +\
+      \ x^4 + 1, all-ones start.\"\"\"\n    state = 0x7F\n    out = bytearray(length)\n    for i in range(length):\n\
+      \        value = 0\n        for _ in range(8):\n            bit = ((state >> 6) ^ (state >> 3))\
+      \ & 1\n            state = ((state << 1) | bit) & 0x7F\n            value = (value << 1) | bit\n\
+      \        out[i] = value\n    return np.frombuffer(bytes(out), dtype=np.uint8)\n\n\nclass blk(gr.sync_block):\n\
+      \    def __init__(self, udp_port=5000, ts_per_frame=4, log_file=\"tx.log\",\n                 samples_per_frame=0.0,\
+      \ samp_rate=2000000, max_latency_ms=40.0,\n                 consumed_samples=0):\n        gr.sync_block.__init__(\n\
+      \            self, name=\"FPV Packetizer + AES-128 TX\", in_sig=None, out_sig=[np.uint8]\n    \
+      \    )\n        self.udp_port = int(udp_port)\n        self.payload_len = TS_PACKET_LEN * int(ts_per_frame)\n\
+      \        self.body_len = 3 + self.payload_len + CRYPTO_OVERHEAD + 4\n        self._cipher = FrameCipher()\n\
+      \        self.log_file = log_file\n        # samples_per_frame = 0 switches the latency control\
+      \ off.\n        self.samples_per_frame = float(samples_per_frame)\n        self.samp_rate = float(samp_rate)\n\
+      \        self.max_latency_ms = float(max_latency_ms)\n\n        length = bytes([self.body_len >>\
+      \ 8, self.body_len & 0xFF])\n        self._header = SYNC_WORD + length + length\n        self._whitening\
+      \ = whitening_sequence(self.body_len)\n        self._idle_payload = bytes(self.payload_len)\n \
+      \       self._lock = threading.Lock()\n        self._consumed = 0\n        self._consumed_time\
+      \ = time.monotonic()\n        self._sock = None\n        self._log = logging.getLogger(\"fpv_tx\"\
+      )\n        self._queue = bytearray()\n        self._queue_time = None\n        self._pending =\
+      \ b\"\"\n        self._seq = 0\n        self._frames = 0\n        self._dropped_bytes = 0\n   \
+      \     self._data_frames = 0\n        self._idle_frames = 0\n        self._input_bytes = 0\n   \
+      \     # Set while the flow graph is not running; ends the status thread.\n        self.stopped\
+      \ = threading.Event()\n        self.stopped.set()\n\n    @property\n    def consumed_samples(self):\n\
+      \        return self._consumed\n\n    @consumed_samples.setter\n    def consumed_samples(self,\
+      \ value):\n        with self._lock:\n            if value != self._consumed:\n                self._consumed\
+      \ = value\n                self._consumed_time = time.monotonic()\n\n    # The socket and the log\
+      \ are opened in start(), not in __init__, because\n    # GNU Radio Companion creates the block\
+      \ once just to inspect its ports.\n    def start(self):\n        self._log.setLevel(logging.INFO)\n\
+      \        if self.log_file and not self._log.handlers:\n            handler = logging.FileHandler(log_path(self.log_file))\n\
+      \            handler.setFormatter(logging.Formatter(\"%(asctime)s %(levelname)s %(message)s\"))\n\
+      \            self._log.addHandler(handler)\n\n        self._sock = socket.socket(socket.AF_INET,\
+      \ socket.SOCK_DGRAM)\n        self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 1 << 20)\n\
+      \        self._sock.bind((\"0.0.0.0\", self.udp_port))\n        self._sock.setblocking(False)\n\
+      \        self._log.info(\n            \"start: udp_port=%d frame_bytes=%d payload_bytes=%d max_latency_ms=%.0f\"\
+      ,\n            self.udp_port, len(self._header) + self.body_len, self.payload_len,\n          \
+      \  self.max_latency_ms,\n        )\n        self._log.info(\"AES-128-CTR enabled in modem; crypto\
+      \ overhead %d bytes/frame\", CRYPTO_OVERHEAD)\n        self.stopped.clear()\n        return True\n\
+      \n    def stop(self):\n        self.stopped.set()\n        if self._sock is not None:\n       \
+      \     self._sock.close()\n            self._sock = None\n        self._log.info(\n            \"\
+      stop: data_frames=%d idle_frames=%d dropped_bytes=%d\",\n            self._data_frames, self._idle_frames,\
+      \ self._dropped_bytes,\n        )\n        for handler in list(self._log.handlers):\n         \
+      \   handler.close()\n            self._log.removeHandler(handler)\n        return True\n\n    def\
+      \ get_data_frames(self):\n        return self._data_frames\n\n    def get_idle_frames(self):\n\
+      \        return self._idle_frames\n\n    def get_dropped_bytes(self):\n        return self._dropped_bytes\n\
+      \n    def get_totals(self):\n        \"\"\"Counters since the start, for the status line in the\
+      \ log.\"\"\"\n        with self._lock:\n            consumed = self._consumed\n        waiting\
+      \ = self._frames * self.samples_per_frame - consumed\n        return dict(\n            data_frames=self._data_frames,\n\
+      \            idle_frames=self._idle_frames,\n            input_bytes=self._input_bytes,\n     \
+      \       dropped_bytes=self._dropped_bytes,\n            queue_bytes=len(self._queue),\n       \
+      \     waiting_ms=waiting / self.samp_rate * 1000.0,\n        )\n\n    def _read_socket(self):\n\
+      \        while True:\n            try:\n                data = self._sock.recv(65536)\n       \
+      \     except OSError:\n                break\n            if not self._queue:\n               \
+      \ self._queue_time = time.monotonic()\n            self._queue += data\n            self._input_bytes\
+      \ += len(data)\n        # Input is faster than the radio link: drop the oldest TS packets,\n  \
+      \      # whole packets only, so the stream stays aligned to 188 bytes.\n        limit = self.payload_len\
+      \ * MAX_QUEUE_FRAMES\n        if len(self._queue) > limit:\n            excess = len(self._queue)\
+      \ - limit\n            excess += (-excess) % TS_PACKET_LEN\n            del self._queue[:excess]\n\
+      \            if self._dropped_bytes == 0:\n                self._log.warning(\"input queue overflow,\
+      \ dropping oldest data\")\n            self._dropped_bytes += excess\n\n    def _may_start_frame(self):\n\
+      \        if self.samples_per_frame <= 0:\n            return True\n        with self._lock:\n \
+      \           since_update = min(time.monotonic() - self._consumed_time, MAX_EXTRAPOLATION_S)\n \
+      \           consumed = self._consumed + since_update * self.samp_rate\n        waiting = self._frames\
+      \ * self.samples_per_frame - consumed\n        return waiting < self.max_latency_ms * 1e-3 * self.samp_rate\n\
+      \n    def _take_payload(self):\n        \"\"\"Returns the payload of the next data frame, or None\
+      \ for an idle frame.\"\"\"\n        now = time.monotonic()\n        if len(self._queue) >= self.payload_len:\n\
+      \            payload = bytes(self._queue[:self.payload_len])\n            del self._queue[:self.payload_len]\n\
+      \            self._queue_time = now\n            return payload\n        whole = len(self._queue)\
+      \ - len(self._queue) % TS_PACKET_LEN\n        if whole and now - self._queue_time > MAX_PARTIAL_WAIT_S:\n\
+      \            # Do not let the last packets of a burst wait for more data.\n            payload\
+      \ = bytes(self._queue[:whole])\n            del self._queue[:whole]\n            self._queue_time\
+      \ = now\n            missing = (self.payload_len - whole) // TS_PACKET_LEN\n            return\
+      \ payload + TS_NULL_PACKET * missing\n        return None\n\n    def _next_frame(self):\n     \
+      \   payload = self._take_payload()\n        if payload is None:\n            frame_type = FRAME_TYPE_IDLE\n\
+      \            payload = self._idle_payload\n            self._idle_frames += 1\n        else:\n\
+      \            frame_type = FRAME_TYPE_DATA\n            self._data_frames += 1\n        encrypted\
+      \ = self._cipher.encrypt(payload)\n        body = bytes([self._seq >> 8, self._seq & 0xFF, frame_type])\
+      \ + encrypted\n        body += zlib.crc32(body).to_bytes(4, \"big\")\n        self._seq = (self._seq\
+      \ + 1) & 0xFFFF\n        self._frames += 1\n        whitened = np.frombuffer(body, dtype=np.uint8)\
+      \ ^ self._whitening\n        return self._header + whitened.tobytes()\n\n    def work(self, input_items,\
+      \ output_items):\n        out = output_items[0]\n        produced = 0\n        while produced <\
+      \ len(out):\n            if not self._pending:\n                if not self._may_start_frame():\n\
+      \                    if produced > 0:\n                        break\n                    self._wait_for_room()\n\
+      \                self._read_socket()\n                self._pending = self._next_frame()\n    \
+      \        count = min(len(out) - produced, len(self._pending))\n            out[produced:produced\
+      \ + count] = np.frombuffer(\n                self._pending, dtype=np.uint8, count=count\n     \
+      \       )\n            self._pending = self._pending[count:]\n            produced += count\n \
+      \       return produced\n\n    def _wait_for_room(self):\n        # A source block must never return\
+      \ zero items (GNU Radio would treat\n        # it as finished), so wait here until the radio has\
+      \ taken enough\n        # samples. The timeout keeps the flow graph responsive to stop().\n   \
+      \     deadline = time.monotonic() + MAX_WAIT_S\n        while not self._may_start_frame() and time.monotonic()\
+      \ < deadline:\n            time.sleep(0.001)\n"
     affinity: ''
     alias: ''
     comment: ''
@@ -636,7 +640,7 @@ blocks:
     ts_per_frame: ts_per_frame
     udp_port: udp_in_port
   states:
-    _io_cache: ('FPV Packetizer', 'blk', [('udp_port', '5000'), ('ts_per_frame', '4'),
+    _io_cache: ('FPV Packetizer + AES-128 TX', 'blk', [('udp_port', '5000'), ('ts_per_frame', '4'),
       ('log_file', "'tx.log'"), ('samples_per_frame', '0.0'), ('samp_rate', '2000000'),
       ('max_latency_ms', '40.0'), ('consumed_samples', '0')], [], [('0', 'byte', 1)],
       '', ['consumed_samples', 'log_file', 'max_latency_ms', 'samp_rate', 'samples_per_frame',

@@ -1,4 +1,4 @@
-"""Video side of the TRANSMITTER: camera -> H.264 -> MPEG-TS -> AES-256-GCM -> UDP -> fpv_tx.
+"""Video side of the TRANSMITTER: camera -> H.264 -> MPEG-TS -> UDP -> fpv_tx.
 
 Runs ffmpeg with low-latency settings and keeps a log (video_tx.log) with the
 frame rate and bit rate. Settings come from the [video] section of tx.ini;
@@ -21,10 +21,7 @@ import threading
 import time
 
 import video_common
-from video_crypto import EncryptRelay, FrameEncoder, load_key
 
-# Shared secret: anyone with this source file can extract the key.
-EMBEDDED_AES_KEY = bytes.fromhex("075361aa0d6e6db640b40efd064a467c7921072d721d21ae4399216b9115c92c")
 
 VIDEO_DEFAULTS = dict(
     source="camera", camera_name="", width="640", height="480", fps="25",
@@ -37,7 +34,7 @@ MAIN_DEFAULTS = dict(samp_rate="2000000", sps="2", ts_per_frame="4",
 TS_LEN = 188
 # Messages of ffmpeg that are not problems (full-range colours of webcams).
 HARMLESS = ("deprecated pixel format",)
-FRAME_OVERHEAD = 8 + 3 + 4  # modem frame: sync and length + header + CRC32
+FRAME_OVERHEAD = 8 + 3 + 16 + 4 + 4  # modem frame: sync and length + header + CRC32
 TS_MARGIN = 1.10            # MPEG-TS headers on top of the video bit rate
 VBV_SECONDS = 0.2           # encoder rate buffer; small = even bit rate, low delay
 REPORT_PERIOD = 10.0
@@ -126,7 +123,7 @@ def build_command(ffmpeg, main, video, log):
         "-bufsize", "%dk" % max(1, int(bitrate * VBV_SECONDS)),
         "-x264-params", x264,
         "-f", "mpegts", "-flush_packets", "1",
-        "udp://127.0.0.1:%s?pkt_size=%d" % (main.get("crypto_input_port", main["udp_in_port"]), int(main.get("crypto_plain_packets", 7)) * TS_LEN)]
+        "udp://127.0.0.1:%s?pkt_size=%d" % (main["udp_in_port"], 7 * TS_LEN)]
 
 
 class Progress(threading.Thread):
@@ -199,7 +196,6 @@ def main():
     parser.add_argument("--bitrate", type=int, help="kbit/s; overrides tx.ini")
     parser.add_argument("--port", type=int, help="UDP port; overrides udp_in_port")
     parser.add_argument("--seconds", type=float, default=0, help="stop after this time")
-    parser.add_argument("--key-file", help="override the embedded key with a 32-byte binary key file")
     args = parser.parse_args()
 
     main_cfg, video = video_common.read_config("tx.ini", VIDEO_DEFAULTS, MAIN_DEFAULTS)
@@ -208,7 +204,6 @@ def main():
         for name in list_cameras(ffmpeg):
             print(name)
         return
-    key = load_key(args.key_file) if args.key_file else EMBEDDED_AES_KEY
     if args.source:
         video["source"] = args.source
     if args.bitrate:
@@ -218,30 +213,20 @@ def main():
 
     log = video_common.open_log("video_tx", video["log_file"])
     capacity = link_capacity(main_cfg) / 1000.0
-    framing = FrameEncoder(key, int(main_cfg["ts_per_frame"]))
-    overhead = framing.frame_packets / framing.plain_packets
-    needed = int(video["bitrate_kbps"]) * TS_MARGIN * overhead
+    needed = int(video["bitrate_kbps"]) * TS_MARGIN
     log.info("start: %sx%s at %s fps, %s kbit/s; link capacity %.0f kbit/s",
              video["width"], video["height"], video["fps"], video["bitrate_kbps"], capacity)
     if needed > capacity:
         log.warning("video needs about %.0f kbit/s with MPEG-TS headers, the link offers "
                     "%.0f kbit/s: lower bitrate_kbps in tx.ini", needed, capacity)
 
-    relay = EncryptRelay(key, int(main_cfg["udp_in_port"]), int(main_cfg["ts_per_frame"]))
-    main_cfg["crypto_input_port"] = str(relay.port)
-    main_cfg["crypto_plain_packets"] = str(framing.plain_packets)
-    relay.start()
-    log.info("AES-256-GCM: %d input TS per %d-packet modem frame; overhead %.0f%% "
-             "for full records, up to 20 ms buffering for short records",
-             framing.plain_packets, framing.frame_packets, (overhead - 1) * 100)
+    log.info("Video UDP is plaintext on loopback; AES-128-CTR runs in the GNU Radio modem")
     started = time.monotonic()
     process = None
     last_command = None
     waiting = False
     try:
         while True:
-            if relay.error is not None:
-                raise RuntimeError("Encryption relay failed") from relay.error
             # The camera is looked up again before every start of ffmpeg, so a
             # camera plugged in later, or reconnected, is found by itself.
             command = build_command(ffmpeg, main_cfg, video, log)
@@ -262,8 +247,6 @@ def main():
             Progress(process.stdout, log).start()
             Messages(process.stderr, log).start()
             while process.poll() is None:
-                if relay.error is not None:
-                    raise RuntimeError("Encryption relay failed") from relay.error
                 time.sleep(0.2)
                 if args.seconds and time.monotonic() - started >= args.seconds:
                     raise KeyboardInterrupt
@@ -275,7 +258,6 @@ def main():
     finally:
         if process is not None:
             stop_process(process)
-        relay.close()
         log.info("stop")
 
 
