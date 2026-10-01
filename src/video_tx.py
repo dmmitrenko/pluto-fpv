@@ -29,7 +29,8 @@ EMBEDDED_AES_KEY = bytes.fromhex("075361aa0d6e6db640b40efd064a467c7921072d721d21
 VIDEO_DEFAULTS = dict(
     source="camera", camera_name="", width="640", height="480", fps="25",
     bitrate_kbps="800", preset="veryfast", keyint="25", intra_refresh="1",
-    log_file="video_tx.log", ffmpeg_dir="")
+    log_file="video_tx.log", ffmpeg_dir="",
+    capture_width="", capture_height="", capture_fps="")
 MAIN_DEFAULTS = dict(samp_rate="2000000", sps="2", ts_per_frame="4",
                      fec_enabled="1", udp_in_port="5000")
 
@@ -81,6 +82,9 @@ def input_args(video, ffmpeg, log):
     source = video["source"].strip()
     size = "%sx%s" % (video["width"], video["height"])
     if source == "camera":
+        size = "%sx%s" % (video.get("capture_width") or video["width"],
+                            video.get("capture_height") or video["height"])
+        capture_fps = video.get("capture_fps") or video["fps"]
         name = video["camera_name"].strip()
         if not name:
             cameras = list_cameras(ffmpeg)
@@ -88,9 +92,9 @@ def input_args(video, ffmpeg, log):
                 return None
             name = cameras[0]
         if os.name != "nt":
-            return ["-f", "v4l2", "-video_size", size, "-framerate", video["fps"], "-i", name]
+            return ["-f", "v4l2", "-video_size", size, "-framerate", capture_fps, "-i", name]
         return ["-f", "dshow", "-rtbufsize", "8M", "-video_size", size,
-                "-framerate", video["fps"], "-i", "video=" + name]
+                "-framerate", capture_fps, "-i", "video=" + name]
     if source == "test":
         # Diagnostic picture with a running frame counter and clock.
         return ["-re", "-f", "lavfi", "-i",
@@ -109,6 +113,9 @@ def build_command(ffmpeg, main, video, log):
         # No large key frames: the picture is refreshed column by column,
         # so the bit rate stays even and nothing queues up before the modem.
         x264 += ":intra-refresh=1"
+    else:
+        # Repeat decoder configuration with regular independently decodable IDRs.
+        x264 += ":intra-refresh=0:open-gop=0:scenecut=0:repeat-headers=1"
     return [ffmpeg, "-hide_banner", "-loglevel", "warning", "-nostats",
             "-progress", "pipe:1", "-stats_period", "1"] + source + [
         "-an",
