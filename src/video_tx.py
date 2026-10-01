@@ -21,7 +21,7 @@ import threading
 import time
 
 import video_common
-from video_crypto import EncryptRelay, load_key
+from video_crypto import EncryptRelay, FrameEncoder, load_key
 
 # Shared secret: anyone with this source file can extract the key.
 EMBEDDED_AES_KEY = bytes.fromhex("075361aa0d6e6db640b40efd064a467c7921072d721d21ae4399216b9115c92c")
@@ -126,7 +126,7 @@ def build_command(ffmpeg, main, video, log):
         "-bufsize", "%dk" % max(1, int(bitrate * VBV_SECONDS)),
         "-x264-params", x264,
         "-f", "mpegts", "-flush_packets", "1",
-        "udp://127.0.0.1:%s?pkt_size=%d" % (main.get("crypto_input_port", main["udp_in_port"]), 7 * TS_LEN)]
+        "udp://127.0.0.1:%s?pkt_size=%d" % (main.get("crypto_input_port", main["udp_in_port"]), int(main.get("crypto_plain_packets", 7)) * TS_LEN)]
 
 
 class Progress(threading.Thread):
@@ -218,17 +218,22 @@ def main():
 
     log = video_common.open_log("video_tx", video["log_file"])
     capacity = link_capacity(main_cfg) / 1000.0
-    needed = int(video["bitrate_kbps"]) * TS_MARGIN * 9 / 7
+    framing = FrameEncoder(key, int(main_cfg["ts_per_frame"]))
+    overhead = framing.frame_packets / framing.plain_packets
+    needed = int(video["bitrate_kbps"]) * TS_MARGIN * overhead
     log.info("start: %sx%s at %s fps, %s kbit/s; link capacity %.0f kbit/s",
              video["width"], video["height"], video["fps"], video["bitrate_kbps"], capacity)
     if needed > capacity:
         log.warning("video needs about %.0f kbit/s with MPEG-TS headers, the link offers "
                     "%.0f kbit/s: lower bitrate_kbps in tx.ini", needed, capacity)
 
-    relay = EncryptRelay(key, int(main_cfg["udp_in_port"]))
+    relay = EncryptRelay(key, int(main_cfg["udp_in_port"]), int(main_cfg["ts_per_frame"]))
     main_cfg["crypto_input_port"] = str(relay.port)
+    main_cfg["crypto_plain_packets"] = str(framing.plain_packets)
     relay.start()
-    log.info("AES-256-GCM enabled; typical transport overhead 29% (higher for small datagrams)")
+    log.info("AES-256-GCM: %d input TS per %d-packet modem frame; overhead %.0f%% "
+             "for full records, up to 20 ms buffering for short records",
+             framing.plain_packets, framing.frame_packets, (overhead - 1) * 100)
     started = time.monotonic()
     process = None
     last_command = None

@@ -10,6 +10,7 @@ import os
 import socket
 import struct
 import threading
+import time
 
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -93,30 +94,61 @@ class Decoder:
         return bytes(output)
 
 
-class EncryptRelay(threading.Thread):
-    def __init__(self, key, target_port):
-        super().__init__(daemon=True)
+class FrameEncoder:
+    """One authenticated record per modem payload; retain the VAG1 wire format."""
+    def __init__(self, key, ts_per_frame=4):
+        self.frame_packets = int(ts_per_frame)
+        # Keep records readable by existing VAG1 receivers (at most 7 input TS).
+        if not 2 <= self.frame_packets <= 9:
+            raise ValueError("Encrypted transport requires ts_per_frame between 2 and 9")
+        self.plain_packets = min(7, (self.frame_packets * CHUNK - 16) // 188)
+        self.plain_bytes = self.plain_packets * 188
         self.encoder = Encoder(key)
+
+    def encode(self, data):
+        if len(data) > self.plain_bytes:
+            raise ValueError("Record does not fit one modem frame")
+        packets = self.encoder.encode(data)
+        null = b"\x47\x1f\xff\x10" + b"\xff" * 184
+        return b"".join(packets) + null * (self.frame_packets - len(packets))
+
+
+class EncryptRelay(threading.Thread):
+    def __init__(self, key, target_port, ts_per_frame=4):
+        super().__init__(daemon=True)
+        self.encoder = FrameEncoder(key, ts_per_frame)
         self.target = ("127.0.0.1", target_port)
         self.listener = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.listener.bind(("127.0.0.1", 0))
         self.port = self.listener.getsockname()[1]
-        self.listener.settimeout(0.1)
+        self.listener.settimeout(0.01)
         self.sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.stopping = threading.Event()
         self.error = None
 
     def run(self):
+        pending = bytearray()
+        deadline = None
         try:
             while not self.stopping.is_set():
                 try:
                     data = self.listener.recv(65536)
                 except socket.timeout:
-                    continue
-                for start in range(0, len(data), MAX_PLAIN):
-                    packets = self.encoder.encode(data[start:start + MAX_PLAIN])
-                    for i in range(0, len(packets), 7):
-                        self.sender.sendto(b"".join(packets[i:i + 7]), self.target)
+                    data = b""
+                if data:
+                    if len(data) % 188 or any(data[i] != 0x47 for i in range(0, len(data), 188)):
+                        raise ValueError("Expected complete MPEG-TS packets from ffmpeg")
+                    if not pending:
+                        deadline = time.monotonic() + 0.01
+                    pending.extend(data)
+                while len(pending) >= self.encoder.plain_bytes:
+                    chunk = bytes(pending[:self.encoder.plain_bytes])
+                    del pending[:self.encoder.plain_bytes]
+                    self.sender.sendto(self.encoder.encode(chunk), self.target)
+                # Bound latency of a short final record; padding keeps frame alignment.
+                if pending and time.monotonic() >= deadline:
+                    self.sender.sendto(self.encoder.encode(bytes(pending)), self.target)
+                    pending.clear()
         except Exception as exc:
             self.error = exc
         finally:
