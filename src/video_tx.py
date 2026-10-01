@@ -1,4 +1,4 @@
-"""Video side of the TRANSMITTER: camera -> H.264 -> MPEG-TS -> UDP -> fpv_tx.
+"""Video side of the TRANSMITTER: camera -> H.264 -> MPEG-TS -> AES-256-GCM -> UDP -> fpv_tx.
 
 Runs ffmpeg with low-latency settings and keeps a log (video_tx.log) with the
 frame rate and bit rate. Settings come from the [video] section of tx.ini;
@@ -6,7 +6,7 @@ the UDP port is udp_in_port from [main], the same one fpv_tx.grc listens on.
 The link capacity is worked out from the modem settings in common.ini.
 
 Usage:
-    python video_tx.py                  run until Ctrl+C
+    python video_tx.py   run until Ctrl+C
     python video_tx.py --list           show the names of the cameras
     python video_tx.py --bitrate 400    override bitrate_kbps from tx.ini
     python video_tx.py --source test    test picture instead of the camera
@@ -21,6 +21,10 @@ import threading
 import time
 
 import video_common
+from video_crypto import EncryptRelay, load_key
+
+# Shared secret: anyone with this source file can extract the key.
+EMBEDDED_AES_KEY = bytes.fromhex("075361aa0d6e6db640b40efd064a467c7921072d721d21ae4399216b9115c92c")
 
 VIDEO_DEFAULTS = dict(
     source="camera", camera_name="", width="640", height="480", fps="25",
@@ -115,7 +119,7 @@ def build_command(ffmpeg, main, video, log):
         "-bufsize", "%dk" % max(1, int(bitrate * VBV_SECONDS)),
         "-x264-params", x264,
         "-f", "mpegts", "-flush_packets", "1",
-        "udp://127.0.0.1:%s?pkt_size=%d" % (main["udp_in_port"], 7 * TS_LEN)]
+        "udp://127.0.0.1:%s?pkt_size=%d" % (main.get("crypto_input_port", main["udp_in_port"]), 7 * TS_LEN)]
 
 
 class Progress(threading.Thread):
@@ -188,6 +192,7 @@ def main():
     parser.add_argument("--bitrate", type=int, help="kbit/s; overrides tx.ini")
     parser.add_argument("--port", type=int, help="UDP port; overrides udp_in_port")
     parser.add_argument("--seconds", type=float, default=0, help="stop after this time")
+    parser.add_argument("--key-file", help="override the embedded key with a 32-byte binary key file")
     args = parser.parse_args()
 
     main_cfg, video = video_common.read_config("tx.ini", VIDEO_DEFAULTS, MAIN_DEFAULTS)
@@ -196,6 +201,7 @@ def main():
         for name in list_cameras(ffmpeg):
             print(name)
         return
+    key = load_key(args.key_file) if args.key_file else EMBEDDED_AES_KEY
     if args.source:
         video["source"] = args.source
     if args.bitrate:
@@ -205,19 +211,25 @@ def main():
 
     log = video_common.open_log("video_tx", video["log_file"])
     capacity = link_capacity(main_cfg) / 1000.0
-    needed = int(video["bitrate_kbps"]) * TS_MARGIN
+    needed = int(video["bitrate_kbps"]) * TS_MARGIN * 9 / 7
     log.info("start: %sx%s at %s fps, %s kbit/s; link capacity %.0f kbit/s",
              video["width"], video["height"], video["fps"], video["bitrate_kbps"], capacity)
     if needed > capacity:
         log.warning("video needs about %.0f kbit/s with MPEG-TS headers, the link offers "
                     "%.0f kbit/s: lower bitrate_kbps in tx.ini", needed, capacity)
 
+    relay = EncryptRelay(key, int(main_cfg["udp_in_port"]))
+    main_cfg["crypto_input_port"] = str(relay.port)
+    relay.start()
+    log.info("AES-256-GCM enabled; typical transport overhead 29% (higher for small datagrams)")
     started = time.monotonic()
     process = None
     last_command = None
     waiting = False
     try:
         while True:
+            if relay.error is not None:
+                raise RuntimeError("Encryption relay failed") from relay.error
             # The camera is looked up again before every start of ffmpeg, so a
             # camera plugged in later, or reconnected, is found by itself.
             command = build_command(ffmpeg, main_cfg, video, log)
@@ -238,6 +250,8 @@ def main():
             Progress(process.stdout, log).start()
             Messages(process.stderr, log).start()
             while process.poll() is None:
+                if relay.error is not None:
+                    raise RuntimeError("Encryption relay failed") from relay.error
                 time.sleep(0.2)
                 if args.seconds and time.monotonic() - started >= args.seconds:
                     raise KeyboardInterrupt
@@ -249,6 +263,7 @@ def main():
     finally:
         if process is not None:
             stop_process(process)
+        relay.close()
         log.info("stop")
 
 
