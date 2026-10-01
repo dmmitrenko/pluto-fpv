@@ -1,0 +1,18 @@
+# Video side of the transmitter: camera -> H.264 -> UDP -> modem.
+# pi/deploy.sh fills in @USER@ and @SRC@ and installs it to /etc/systemd/system.
+[Unit]
+Description=FPV transmitter video (camera, ffmpeg)
+After=network.target
+
+[Service]
+User=@USER@
+WorkingDirectory=@SRC@
+ExecStart=/usr/bin/python3 -u video_tx.py
+# video_tx.py stops ffmpeg cleanly on Ctrl+C
+KillSignal=SIGINT
+TimeoutStopSec=10
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

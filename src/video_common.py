@@ -5,11 +5,17 @@ import logging
 import os
 import shutil
 import sys
+import time
 
 SRC_DIR = os.path.dirname(os.path.abspath(__file__))
 COMMON_INI = "common.ini"
+# Log files go to logs/<yyyy-mm-dd>/ in the repository root (next to src), one
+# folder per day. The packetizer, the depacketizer and tx_modem_loop.sh use the
+# same place.
+LOG_DIR = os.path.join(os.path.dirname(SRC_DIR), "logs")
 
-INSTALL_HINT = "install it with:  winget install Gyan.FFmpeg"
+INSTALL_HINT = ("install it with:  winget install Gyan.FFmpeg" if os.name == "nt"
+                else "install it with:  sudo apt install ffmpeg")
 
 
 def read_config(ini_name, video_defaults, main_defaults):
@@ -33,8 +39,15 @@ def read_config(ini_name, video_defaults, main_defaults):
     return main, video
 
 
+def log_path(file_name):
+    """Path of a log file in today's folder, logs/<yyyy-mm-dd>/, created if needed."""
+    folder = os.path.join(LOG_DIR, time.strftime("%Y-%m-%d"))
+    os.makedirs(folder, exist_ok=True)
+    return os.path.join(folder, file_name)
+
+
 def open_log(name, file_name):
-    """Log to the file (next to the scripts) and to the console."""
+    """Log to the file in today's log folder and to the console."""
     log = logging.getLogger(name)
     log.setLevel(logging.INFO)
     formatter = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
@@ -42,7 +55,7 @@ def open_log(name, file_name):
     console.setFormatter(formatter)
     log.addHandler(console)
     if file_name:
-        handler = logging.FileHandler(os.path.join(SRC_DIR, file_name), encoding="utf-8")
+        handler = logging.FileHandler(log_path(file_name), encoding="utf-8")
         handler.setFormatter(formatter)
         log.addHandler(handler)
     return log

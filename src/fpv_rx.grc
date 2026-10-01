@@ -299,7 +299,7 @@ blocks:
     option: '''pluto_uri'''
     section: main
     type: string
-    value: ip:192.168.3.1
+    value: ip:192.168.2.1
     writeback: None
   states:
     bus_sink: false
@@ -513,16 +513,17 @@ blocks:
     rotation: 0
     state: enabled
 - name: agc
-  id: analog_agc_xx
+  id: analog_agc2_xx
   parameters:
     affinity: ''
     alias: ''
+    attack_rate: 1e-1
     comment: ''
+    decay_rate: 1e-3
     gain: '1.0'
     max_gain: '65536'
     maxoutbuf: '0'
     minoutbuf: '0'
-    rate: 1e-3
     reference: '1.0'
     type: complex
   states:
@@ -657,9 +658,9 @@ blocks:
       \ video player);\n- counts lost frames from gaps in the sequence numbers;\n\
       - tracks sync state, received bitrate and loss ratio for the GUI;\n- writes\
       \ sync/loss/recovery events to a log file;\n- provides counters for the periodic\
-      \ status line in the log.\n\"\"\"\n\nimport collections\nimport logging\nimport\
+      \ status line in the log.\n\"\"\"\n\nimport collections\nimport logging\nimport os\nimport\
       \ socket\nimport threading\nimport time\nimport zlib\n\nimport numpy as np\n\
-      from gnuradio import gr\n\nTS_PACKET_LEN = 188\nSYNC_WORD = bytes([0xE1, 0x5A,\
+      from gnuradio import gr\n\n# Log files go to logs/<yyyy-mm-dd>/ in the repository root (next to src), one\n# folder per day. video_common.py and tx_modem_loop.sh use the same place.\ndef log_path(name):\n    folder = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),\n                          \"logs\", time.strftime(\"%Y-%m-%d\"))\n    os.makedirs(folder, exist_ok=True)\n    return os.path.join(folder, name)\n\n\nTS_PACKET_LEN = 188\nSYNC_WORD = bytes([0xE1, 0x5A,\
       \ 0xE8, 0x93])\nHEADER_LEN = 8\nFRAME_TYPE_DATA = 1\n# Bit errors tolerated\
       \ in the 32-bit sync word while searching.\nSYNC_MAX_ERRORS = 2\n# Bad frames\
       \ in a row before frame sync is declared lost.\nMAX_BAD_FRAMES = 4\n# No good\
@@ -697,7 +698,7 @@ blocks:
       \n    # The socket and the log are opened in start(), not in __init__, because\n\
       \    # GNU Radio Companion creates the block once just to inspect its ports.\n\
       \    def start(self):\n        self._log.setLevel(logging.INFO)\n        if\
-      \ self.log_file and not self._log.handlers:\n            handler = logging.FileHandler(self.log_file)\n\
+      \ self.log_file and not self._log.handlers:\n            handler = logging.FileHandler(log_path(self.log_file))\n\
       \            handler.setFormatter(logging.Formatter(\"%(asctime)s %(levelname)s\
       \ %(message)s\"))\n            self._log.addHandler(handler)\n        self._sock\
       \ = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)\n        self._log.info(\n\
@@ -1327,8 +1328,80 @@ blocks:
     rotation: 0
     state: enabled
 
+- name: clip_split
+  id: blocks_complex_to_float
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    vlen: '1'
+    maxoutbuf: '0'
+    minoutbuf: '0'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [280, 960.0]
+    rotation: 0
+    state: enabled
+- name: clip_i
+  id: analog_rail_ff
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    hi: '2.0'
+    lo: '-2.0'
+    maxoutbuf: '0'
+    minoutbuf: '0'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [480, 936.0]
+    rotation: 0
+    state: enabled
+- name: clip_q
+  id: analog_rail_ff
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    hi: '2.0'
+    lo: '-2.0'
+    maxoutbuf: '0'
+    minoutbuf: '0'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [480, 1000.0]
+    rotation: 0
+    state: enabled
+- name: clip_join
+  id: blocks_float_to_complex
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    vlen: '1'
+    maxoutbuf: '0'
+    minoutbuf: '0'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [680, 960.0]
+    rotation: 0
+    state: enabled
+
 connections:
-- [agc, '0', carrier_coarse, '0']
+- [agc, '0', clip_split, '0']
+- [clip_split, '0', clip_i, '0']
+- [clip_split, '1', clip_q, '0']
+- [clip_i, '0', clip_join, '0']
+- [clip_q, '0', clip_join, '1']
+- [clip_join, '0', carrier_coarse, '0']
 - [bits_to_float, '0', soft_scale, '0']
 - [carrier_coarse, '0', clock_sync, '0']
 - [carrier_fine, '0', rx_constellation, '0']
