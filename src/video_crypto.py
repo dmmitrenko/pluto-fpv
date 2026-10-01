@@ -114,10 +114,13 @@ class FrameEncoder:
 
 
 class EncryptRelay(threading.Thread):
-    def __init__(self, key, target_port, ts_per_frame=4):
+    def __init__(self, key, target_port, ts_per_frame=4, preview_port=None):
         super().__init__(daemon=True)
         self.encoder = FrameEncoder(key, ts_per_frame)
         self.target = ("127.0.0.1", target_port)
+        # Optional copy of the plain stream for a local preview window; it never
+        # reaches the radio and is the last point where the video is readable.
+        self.preview = ("127.0.0.1", preview_port) if preview_port else None
         self.listener = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.listener.bind(("127.0.0.1", 0))
         self.port = self.listener.getsockname()[1]
@@ -138,6 +141,11 @@ class EncryptRelay(threading.Thread):
                 if data:
                     if len(data) % 188 or any(data[i] != 0x47 for i in range(0, len(data), 188)):
                         raise ValueError("Expected complete MPEG-TS packets from ffmpeg")
+                    if self.preview is not None:
+                        try:
+                            self.sender.sendto(data, self.preview)
+                        except OSError:
+                            pass  # nobody watches the preview
                     if not pending:
                         deadline = time.monotonic() + 0.01
                     pending.extend(data)

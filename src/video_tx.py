@@ -21,6 +21,7 @@ import threading
 import time
 
 import video_common
+import video_osd
 from video_crypto import EncryptRelay, FrameEncoder, load_key
 
 # Shared secret: anyone with this source file can extract the key.
@@ -136,17 +137,35 @@ class Progress(threading.Thread):
         super().__init__(daemon=True)
         self.stream = stream
         self.log = log
+        # Latest figures, refreshed every stats period for the preview overlay.
+        self.fps = self.kbit = 0.0
+        self.frames = 0
+        self.dropped = self.duplicated = "?"
 
     def run(self):
         values = {}
-        last_report = time.monotonic()
+        last_report = last_sample = time.monotonic()
         last_frame = last_size = 0
+        sample_frame = sample_size = 0
         for raw in self.stream:
             key, _, value = raw.decode("utf-8", errors="replace").strip().partition("=")
             values[key] = value
             if key != "progress":
                 continue
             now = time.monotonic()
+            try:
+                frame_now = int(values.get("frame", 0))
+                size_now = int(values.get("total_size", 0))
+            except ValueError:
+                frame_now = size_now = 0
+            elapsed = now - last_sample
+            if elapsed > 0.2:
+                self.fps = (frame_now - sample_frame) / elapsed
+                self.kbit = (size_now - sample_size) * 8 / 1000.0 / elapsed
+                self.frames = frame_now
+                self.dropped = values.get("drop_frames", "?")
+                self.duplicated = values.get("dup_frames", "?")
+                last_sample, sample_frame, sample_size = now, frame_now, size_now
             if now - last_report < REPORT_PERIOD:
                 continue
             try:
@@ -177,6 +196,26 @@ class Messages(threading.Thread):
                 self.log.warning("ffmpeg: %s", line)
 
 
+def start_preview(video, port, overlay=""):
+    """Window with the picture as it goes into the modem, before the radio."""
+    ffplay = video_common.find_tool("ffplay", video["ffmpeg_dir"])
+    url = "udp://127.0.0.1:%d?fifo_size=20000&overrun_nonfatal=1" % port
+    command = [ffplay, "-hide_banner", "-loglevel", "warning", "-nostats",
+               "-f", "mpegts", "-fflags", "nobuffer", "-flags", "low_delay",
+               "-probesize", "32768", "-analyzeduration", "0",
+               "-framedrop", "-sync", "ext"]
+    if overlay:
+        command += ["-vf", overlay]
+    command += ["-window_title", "FPV TX (original)", url]
+    environment = dict(os.environ)
+    # Same reason as in video_rx.py: on Wayland the SDL window has no title bar.
+    if os.name != "nt" and environment.get("WAYLAND_DISPLAY") and environment.get("DISPLAY"):
+        environment["SDL_VIDEODRIVER"] = "x11"
+    return command, subprocess.Popen(command, stdin=subprocess.DEVNULL,
+                                     stdout=subprocess.DEVNULL,
+                                     stderr=subprocess.PIPE, env=environment)
+
+
 def stop_process(process):
     """Asks ffmpeg to finish ('q'), and ends it by force if it does not."""
     if process.poll() is None:
@@ -199,6 +238,10 @@ def main():
     parser.add_argument("--bitrate", type=int, help="kbit/s; overrides tx.ini")
     parser.add_argument("--port", type=int, help="UDP port; overrides udp_in_port")
     parser.add_argument("--seconds", type=float, default=0, help="stop after this time")
+    parser.add_argument("--preview", action="store_true",
+                        help="window with the picture as sent, before the radio")
+    parser.add_argument("--preview-port", type=int, default=5004,
+                        help="UDP port of the preview copy (default 5004)")
     parser.add_argument("--key-file", help="override the embedded key with a 32-byte binary key file")
     args = parser.parse_args()
 
@@ -227,14 +270,23 @@ def main():
         log.warning("video needs about %.0f kbit/s with MPEG-TS headers, the link offers "
                     "%.0f kbit/s: lower bitrate_kbps in tx.ini", needed, capacity)
 
-    relay = EncryptRelay(key, int(main_cfg["udp_in_port"]), int(main_cfg["ts_per_frame"]))
+    preview_osd = video_osd.TxOsd() if args.preview else None
+    relay = EncryptRelay(key, int(main_cfg["udp_in_port"]), int(main_cfg["ts_per_frame"]),
+                         preview_port=args.preview_port if args.preview else None)
     main_cfg["crypto_input_port"] = str(relay.port)
     main_cfg["crypto_plain_packets"] = str(framing.plain_packets)
     relay.start()
     log.info("AES-256-GCM: %d input TS per %d-packet modem frame; overhead %.0f%% "
              "for full records, up to 20 ms buffering for short records",
              framing.plain_packets, framing.frame_packets, (overhead - 1) * 100)
-    started = time.monotonic()
+    preview = None
+    if args.preview:
+        command, preview = start_preview(video, args.preview_port,
+                                         preview_osd.filter_argument())
+        log.info("preview: %s", subprocess.list2cmdline(command))
+        # Without this a broken overlay filter would fail silently.
+        Messages(preview.stderr, log).start()
+    started = next_osd = time.monotonic()
     process = None
     last_command = None
     waiting = False
@@ -259,12 +311,20 @@ def main():
                 last_command = command
             process = subprocess.Popen(command, stdin=subprocess.PIPE,
                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            Progress(process.stdout, log).start()
+            progress = Progress(process.stdout, log)
+            progress.start()
             Messages(process.stderr, log).start()
             while process.poll() is None:
                 if relay.error is not None:
                     raise RuntimeError("Encryption relay failed") from relay.error
                 time.sleep(0.2)
+                if preview_osd is not None and time.monotonic() >= next_osd:
+                    next_osd = time.monotonic() + 1.0
+                    preview_osd.update(
+                        "%sx%s" % (video["width"], video["height"]),
+                        progress.fps, progress.kbit, progress.frames,
+                        progress.dropped, progress.duplicated,
+                        (overhead - 1) * 100)
                 if args.seconds and time.monotonic() - started >= args.seconds:
                     raise KeyboardInterrupt
             log.error("ffmpeg stopped with code %s, restarting in %.0f s",
@@ -275,6 +335,8 @@ def main():
     finally:
         if process is not None:
             stop_process(process)
+        if preview is not None and preview.poll() is None:
+            preview.terminate()
         relay.close()
         log.info("stop")
 
