@@ -16,12 +16,14 @@ Usage:
     python video_rx.py --no-player     counters only, no window
 """
 import argparse
+import os
 import socket
 import subprocess
 import threading
 import time
 
 import video_common
+import video_osd
 from video_crypto import Decoder, load_key
 
 # Shared secret: anyone with this source file can extract the key.
@@ -124,21 +126,30 @@ class DecoderMessages(threading.Thread):
                 self.log.warning("decoder: %s", line)
 
 
-def start_player(ffplay, video):
+def start_player(ffplay, video, overlay=""):
     url = "udp://127.0.0.1:%s?fifo_size=20000&overrun_nonfatal=1" % video["player_port"]
     command = [ffplay, "-hide_banner", "-loglevel", "warning", "-nostats",
                "-f", "mpegts", "-fflags", "nobuffer", "-flags", "low_delay",
                "-probesize", "32768", "-analyzeduration", "0",
-               "-framedrop", "-sync", "ext",
-               "-window_title", video["window_title"], url]
+               "-framedrop", "-sync", "ext"]
+    if overlay:
+        command += ["-vf", overlay]
+    command += ["-window_title", video["window_title"], url]
+    environment = dict(os.environ)
+    # On Wayland the SDL window of ffplay comes up without decorations; through
+    # XWayland the window manager gives it the usual title bar and buttons.
+    if os.name != "nt" and environment.get("WAYLAND_DISPLAY") and environment.get("DISPLAY"):
+        environment["SDL_VIDEODRIVER"] = "x11"
     return command, subprocess.Popen(command, stdin=subprocess.DEVNULL,
-                                     stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+                                     stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+                                     env=environment)
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, help="UDP port; overrides udp_out_port")
     parser.add_argument("--no-player", action="store_true", help="counters only")
+    parser.add_argument("--no-osd", action="store_true", help="no overlay on the picture")
     parser.add_argument("--seconds", type=float, default=0, help="stop after this time")
     parser.add_argument("--key-file", help="override the embedded key with a 32-byte binary key file")
     args = parser.parse_args()
@@ -158,10 +169,14 @@ def main():
     player_address = ("127.0.0.1", int(video["player_port"]))
     log.info("start: listening on UDP %d, player on UDP %d", port, player_address[1])
 
+    osd = None if args.no_osd else video_osd.RxOsd()
     player = decoder = None
     if not args.no_player:
         ffplay = video_common.find_tool("ffplay", video["ffmpeg_dir"])
-        command, player = start_player(ffplay, video)
+        overlay = osd.filter_argument() if osd else ""
+        if osd and not overlay:
+            log.warning("no monospace font found: the picture stays without an overlay")
+        command, player = start_player(ffplay, video, overlay)
         log.info("command: %s", subprocess.list2cmdline(command))
         decoder = DecoderMessages(player.stderr, log)
         decoder.start()
@@ -204,6 +219,9 @@ def main():
                         now - started, fps, kbit, lost, counters.lost, counters.stalls,
                         decoder.count if decoder else 0))
                 console.stream.flush()
+                if osd is not None:
+                    osd.update(fps, kbit, lost, counters.lost, counters.stalls,
+                               decoder.count if decoder else 0, decryptor.rejected)
             if now >= next_log + LOG_PERIOD:
                 next_log += LOG_PERIOD
                 log.info("AES-GCM rejected records: %d", decryptor.rejected)
