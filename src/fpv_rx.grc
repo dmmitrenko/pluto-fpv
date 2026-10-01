@@ -33,6 +33,19 @@ options:
     state: enabled
 
 blocks:
+- name: import_0
+  id: import
+  parameters:
+    alias: ''
+    comment: ''
+    imports: from gnuradio.filter import firdes
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [16, 96.0]
+    rotation: 0
+    state: enabled
 - name: bitrate_label
   id: variable_qtgui_label
   parameters:
