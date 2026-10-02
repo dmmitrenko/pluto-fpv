@@ -1,4 +1,4 @@
-"""Video side of the TRANSMITTER: camera -> H.264 -> MPEG-TS -> AES-256-GCM -> UDP -> fpv_tx.
+"""Video side of the TRANSMITTER: camera -> H.264 -> MPEG-TS -> AES-GCM -> UDP -> fpv_tx.
 
 Runs ffmpeg with low-latency settings and keeps a log (video_tx.log) with the
 frame rate and bit rate. Settings come from the [video] section of tx.ini;
@@ -25,6 +25,7 @@ from video_crypto import EncryptRelay, FrameEncoder, load_key
 
 # Shared secret: anyone with this source file can extract the key.
 EMBEDDED_AES_KEY = bytes.fromhex("075361aa0d6e6db640b40efd064a467c7921072d721d21ae4399216b9115c92c")
+EMBEDDED_AES128_KEY = bytes.fromhex("44b665064ed612c7e1b612f277435182")
 
 VIDEO_DEFAULTS = dict(
     source="camera", camera_name="", width="640", height="480", fps="25",
@@ -116,7 +117,7 @@ def build_command(ffmpeg, main, video, log):
     else:
         # Repeat decoder configuration with regular independently decodable IDRs.
         x264 += ":intra-refresh=0:open-gop=0:scenecut=0:repeat-headers=1"
-    return [ffmpeg, "-hide_banner", "-loglevel", "warning", "-nostats",
+    command = [ffmpeg, "-hide_banner", "-loglevel", "warning", "-nostats",
             "-progress", "pipe:1", "-stats_period", "1"] + source + [
         "-an",
         "-vf", "scale=%s:%s,fps=%s,format=yuv420p" % (
@@ -127,6 +128,9 @@ def build_command(ffmpeg, main, video, log):
         "-x264-params", x264,
         "-f", "mpegts", "-flush_packets", "1",
         "udp://127.0.0.1:%s?pkt_size=%d" % (main.get("crypto_input_port", main["udp_in_port"]), int(main.get("crypto_plain_packets", 7)) * TS_LEN)]
+    if int(video.get("low_latency", "1")):
+        command[-1:-1] = ["-muxdelay", "0", "-muxpreload", "0"]
+    return command
 
 
 class Progress(threading.Thread):
@@ -199,7 +203,9 @@ def main():
     parser.add_argument("--bitrate", type=int, help="kbit/s; overrides tx.ini")
     parser.add_argument("--port", type=int, help="UDP port; overrides udp_in_port")
     parser.add_argument("--seconds", type=float, default=0, help="stop after this time")
-    parser.add_argument("--key-file", help="override the embedded key with a 32-byte binary key file")
+    parser.add_argument("--key-file", help="override embedded key; 16 bytes for AES-128 or 32 for AES-256")
+    parser.add_argument("--aes-bits", type=int, choices=(128, 256), default=128,
+                        help="AES-GCM key size; must match TX/RX (default: 128)")
     args = parser.parse_args()
 
     main_cfg, video = video_common.read_config("tx.ini", VIDEO_DEFAULTS, MAIN_DEFAULTS)
@@ -208,7 +214,8 @@ def main():
         for name in list_cameras(ffmpeg):
             print(name)
         return
-    key = load_key(args.key_file) if args.key_file else EMBEDDED_AES_KEY
+    key = load_key(args.key_file, args.aes_bits) if args.key_file else (
+        EMBEDDED_AES128_KEY if args.aes_bits == 128 else EMBEDDED_AES_KEY)
     if args.source:
         video["source"] = args.source
     if args.bitrate:
@@ -227,13 +234,14 @@ def main():
         log.warning("video needs about %.0f kbit/s with MPEG-TS headers, the link offers "
                     "%.0f kbit/s: lower bitrate_kbps in tx.ini", needed, capacity)
 
-    relay = EncryptRelay(key, int(main_cfg["udp_in_port"]), int(main_cfg["ts_per_frame"]))
+    relay = EncryptRelay(key, int(main_cfg["udp_in_port"]), int(main_cfg["ts_per_frame"]),
+                         wait_ms=float(video.get("crypto_wait_ms", "2")))
     main_cfg["crypto_input_port"] = str(relay.port)
     main_cfg["crypto_plain_packets"] = str(framing.plain_packets)
     relay.start()
-    log.info("AES-256-GCM: %d input TS per %d-packet modem frame; overhead %.0f%% "
-             "for full records, up to 20 ms buffering for short records",
-             framing.plain_packets, framing.frame_packets, (overhead - 1) * 100)
+    log.info("AES-%d-GCM: %d input TS per %d-packet modem frame; overhead %.0f%% "
+             "for full records; short-record wait target %.1f ms",
+             args.aes_bits, framing.plain_packets, framing.frame_packets, (overhead - 1) * 100, relay.wait_s * 1000)
     started = time.monotonic()
     process = None
     last_command = None

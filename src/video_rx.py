@@ -26,6 +26,7 @@ from video_crypto import Decoder, load_key
 
 # Shared secret: anyone with this source file can extract the key.
 EMBEDDED_AES_KEY = bytes.fromhex("075361aa0d6e6db640b40efd064a467c7921072d721d21ae4399216b9115c92c")
+EMBEDDED_AES128_KEY = bytes.fromhex("44b665064ed612c7e1b612f277435182")
 
 VIDEO_DEFAULTS = dict(player_port="5002", stall_ms="200", window_title="FPV RX",
                       log_file="video_rx.log", ffmpeg_dir="")
@@ -131,6 +132,8 @@ def start_player(ffplay, video):
                "-probesize", "32768", "-analyzeduration", "0",
                "-framedrop", "-sync", "ext",
                "-window_title", video["window_title"], url]
+    if int(video.get("low_latency", "1")):
+        command[-1:-1] = ["-threads", "1", "-filter_threads", "1", "-noinfbuf"]
     return command, subprocess.Popen(command, stdin=subprocess.DEVNULL,
                                      stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
 
@@ -140,13 +143,17 @@ def main():
     parser.add_argument("--port", type=int, help="UDP port; overrides udp_out_port")
     parser.add_argument("--no-player", action="store_true", help="counters only")
     parser.add_argument("--seconds", type=float, default=0, help="stop after this time")
-    parser.add_argument("--key-file", help="override the embedded key with a 32-byte binary key file")
+    parser.add_argument("--key-file", help="override embedded key; 16 bytes for AES-128 or 32 for AES-256")
+    parser.add_argument("--aes-bits", type=int, choices=(128, 256), default=128,
+                        help="AES-GCM key size; must match TX/RX (default: 128)")
     args = parser.parse_args()
-    decryptor = Decoder(load_key(args.key_file) if args.key_file else EMBEDDED_AES_KEY)
+    decryptor = Decoder(load_key(args.key_file, args.aes_bits) if args.key_file else (
+        EMBEDDED_AES128_KEY if args.aes_bits == 128 else EMBEDDED_AES_KEY))
 
     main_cfg, video = video_common.read_config("rx.ini", VIDEO_DEFAULTS, MAIN_DEFAULTS)
     port = args.port or int(main_cfg["udp_out_port"])
     log = video_common.open_log("video_rx", video["log_file"])
+    log.info("AES-%d-GCM enabled", args.aes_bits)
     # The once-a-second line goes to the console only.
     console = log.handlers[0]
 

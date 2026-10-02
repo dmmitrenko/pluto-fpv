@@ -1,4 +1,4 @@
-"""AES-256-GCM records carried in opaque 188-byte TS packets (PID 0x1FFE).
+"""AES-128/256-GCM records carried in opaque 188-byte TS packets (PID 0x1FFE).
 
 The modem must preserve non-null TS packets, including their payload bytes.
 UDP grouping may change; missing fragments discard only their own record.
@@ -21,10 +21,10 @@ CHUNK = 184 - HEADER.size
 MAX_PLAIN = 7 * 188
 
 
-def load_key(filename):
+def load_key(filename, bits=128):
     key = Path(filename).read_bytes()
-    if len(key) != 32:
-        raise ValueError("AES key file must contain exactly 32 raw bytes")
+    if bits not in (128, 256) or len(key) != bits // 8:
+        raise ValueError("AES-%d key file must contain exactly %d raw bytes" % (bits, bits // 8))
     return key
 
 
@@ -114,14 +114,17 @@ class FrameEncoder:
 
 
 class EncryptRelay(threading.Thread):
-    def __init__(self, key, target_port, ts_per_frame=4):
+    def __init__(self, key, target_port, ts_per_frame=4, wait_ms=2):
         super().__init__(daemon=True)
+        self.wait_s = float(wait_ms) / 1000
+        if not 0 < self.wait_s <= 0.1:
+            raise ValueError("crypto_wait_ms must be greater than 0 and at most 100")
         self.encoder = FrameEncoder(key, ts_per_frame)
         self.target = ("127.0.0.1", target_port)
         self.listener = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.listener.bind(("127.0.0.1", 0))
         self.port = self.listener.getsockname()[1]
-        self.listener.settimeout(0.01)
+        self.listener.settimeout(self.wait_s)
         self.sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.stopping = threading.Event()
         self.error = None
@@ -131,6 +134,8 @@ class EncryptRelay(threading.Thread):
         deadline = None
         try:
             while not self.stopping.is_set():
+                remaining = max(0.0001, deadline - time.monotonic()) if pending else self.wait_s
+                self.listener.settimeout(remaining)
                 try:
                     data = self.listener.recv(65536)
                 except socket.timeout:
@@ -139,7 +144,7 @@ class EncryptRelay(threading.Thread):
                     if len(data) % 188 or any(data[i] != 0x47 for i in range(0, len(data), 188)):
                         raise ValueError("Expected complete MPEG-TS packets from ffmpeg")
                     if not pending:
-                        deadline = time.monotonic() + 0.01
+                        deadline = time.monotonic() + self.wait_s
                     pending.extend(data)
                 while len(pending) >= self.encoder.plain_bytes:
                     chunk = bytes(pending[:self.encoder.plain_bytes])
@@ -161,9 +166,10 @@ class EncryptRelay(threading.Thread):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Create a shared 256-bit binary key")
+    parser = argparse.ArgumentParser(description="Create a shared AES-GCM binary key")
     parser.add_argument("key_file")
+    parser.add_argument("--aes-bits", type=int, choices=(128, 256), default=128)
     args = parser.parse_args()
     with open(args.key_file, "xb") as stream:
-        stream.write(AESGCM.generate_key(bit_length=256))
+        stream.write(AESGCM.generate_key(bit_length=args.aes_bits))
     print("Key created. Copy securely to RX; do not publish it.")
