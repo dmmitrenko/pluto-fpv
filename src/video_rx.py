@@ -16,6 +16,7 @@ Usage:
     python video_rx.py --no-player     counters only, no window
 """
 import argparse
+import os
 import socket
 import subprocess
 import threading
@@ -127,8 +128,15 @@ def start_player(ffplay, video):
                "-probesize", "32768", "-analyzeduration", "0",
                "-framedrop", "-sync", "ext",
                "-window_title", video["window_title"], url]
+    environment = dict(os.environ)
+    # Under Wayland the SDL window of ffplay comes up with no title bar and no
+    # buttons, so the window cannot be moved or closed with the mouse. Through
+    # XWayland the window manager draws the usual decorations.
+    if os.name != "nt" and environment.get("WAYLAND_DISPLAY") and environment.get("DISPLAY"):
+        environment["SDL_VIDEODRIVER"] = "x11"
     return command, subprocess.Popen(command, stdin=subprocess.DEVNULL,
-                                     stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+                                     stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+                                     env=environment)
 
 
 def main():
