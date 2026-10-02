@@ -105,15 +105,37 @@ class Osd:
 
     @staticmethod
     def _replace(path, text):
-        # Replace in one step: drawtext must never read a half-written file.
-        temporary = path + ".tmp"
-        with open(temporary, "w", encoding="utf-8", newline="\n") as stream:
-            stream.write(text)
-        os.replace(temporary, path)
+        """Puts the text in front of drawtext without ever denying it the file.
+
+        On POSIX a rename is atomic and a reader holding the old file is not
+        disturbed, so write beside the file and move it over. Windows instead
+        locks the destination of a rename: drawtext reloads the file several
+        times a second, and when its open lands inside the rename it is refused
+        with "Permission denied" and the overlay blinks. There the file is
+        rewritten in place, which is only briefly short rather than briefly
+        unopenable, and a refused write is simply tried again.
+        """
+        if os.name != "nt":
+            temporary = path + ".tmp"
+            with open(temporary, "w", encoding="utf-8", newline="\n") as stream:
+                stream.write(text)
+            os.replace(temporary, path)
+            return
+        for attempt in range(5):
+            try:
+                with open(path, "w", encoding="utf-8", newline="\n") as stream:
+                    stream.write(text)
+                return
+            except OSError:
+                if attempt == 4:
+                    return  # the overlay is not worth failing the receiver for
+                time.sleep(0.01)
 
     def write(self, good, headline, lines):
-        self._replace(self.head_ok, headline + "\n" if good else "")
-        self._replace(self.head_bad, "" if good else headline + "\n")
+        # The inactive headline holds a space, not nothing: drawtext treats an
+        # empty file as an error, and a space renders as nothing.
+        self._replace(self.head_ok, headline + "\n" if good else " \n")
+        self._replace(self.head_bad, " \n" if good else headline + "\n")
         self._replace(self.details, "\n".join(lines) + "\n")
         self.columns = max(len(headline), max(len(line) for line in lines))
         self.rows = len(lines)
@@ -144,7 +166,7 @@ class Osd:
             # expansion=none: a '%' in the figures is printed, not taken for the
             # start of a drawtext expansion. borderw outlines every glyph, so the
             # text stays readable even where the plate is over a bright picture.
-            return ("drawtext=fontfile='%s':textfile='%s':reload=1:expansion=none"
+            return ("drawtext=fontfile='%s':textfile='%s':reload=10:expansion=none"
                     ":fontsize=%d:fontcolor=%s:line_spacing=%d"
                     ":borderw=2:bordercolor=black@0.85:x=%d:y=%d"
                     % (escape(font), escape(path), size, colour, LINE_SPACING,
